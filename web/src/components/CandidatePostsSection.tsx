@@ -1,0 +1,220 @@
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowDown, ArrowUp, Check, ExternalLink, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { cn } from "../lib/cn";
+import type { CandidatePost } from "../types/workspace";
+import { Button } from "./ui/Button";
+
+function buildInitialOrder(posts: CandidatePost[]): string[] {
+  return posts
+    .filter((post) => post.selected)
+    .sort((left, right) => (left.manualOrder ?? Number.MAX_SAFE_INTEGER) - (right.manualOrder ?? Number.MAX_SAFE_INTEGER))
+    .map((post) => post.id);
+}
+
+function sortPosts(posts: CandidatePost[], selectedOrder: string[]): CandidatePost[] {
+  const orderIndexMap = new Map(selectedOrder.map((postId, index) => [postId, index]));
+
+  return [...posts].sort((left, right) => {
+    const leftSelected = orderIndexMap.has(left.id);
+    const rightSelected = orderIndexMap.has(right.id);
+
+    if (leftSelected && rightSelected) {
+      return orderIndexMap.get(left.id)! - orderIndexMap.get(right.id)!;
+    }
+
+    if (leftSelected) {
+      return -1;
+    }
+
+    if (rightSelected) {
+      return 1;
+    }
+
+    return left.title.localeCompare(right.title, "zh-CN");
+  });
+}
+
+function moveItem(order: string[], postId: string, direction: "up" | "down"): string[] {
+  const index = order.indexOf(postId);
+
+  if (index === -1) {
+    return order;
+  }
+
+  const targetIndex = direction === "up" ? index - 1 : index + 1;
+  if (targetIndex < 0 || targetIndex >= order.length) {
+    return order;
+  }
+
+  const next = [...order];
+  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+  return next;
+}
+
+export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JSX.Element {
+  const [selectedOrder, setSelectedOrder] = useState<string[]>(() => buildInitialOrder(posts));
+  const [activePostId, setActivePostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedOrder(buildInitialOrder(posts));
+  }, [posts]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setActivePostId(null);
+      }
+    }
+
+    if (activePostId !== null) {
+      document.addEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "hidden";
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [activePostId]);
+
+  const displayPosts = useMemo(() => sortPosts(posts, selectedOrder), [posts, selectedOrder]);
+  const activePost = displayPosts.find((post) => post.id === activePostId) ?? null;
+
+  function toggleSelected(postId: string): void {
+    setSelectedOrder((current) => {
+      if (current.includes(postId)) {
+        return current.filter((value) => value !== postId);
+      }
+
+      return [...current, postId];
+    });
+  }
+
+  function getOrder(postId: string): number | null {
+    const index = selectedOrder.indexOf(postId);
+    return index === -1 ? null : index + 1;
+  }
+
+  return (
+    <>
+      {displayPosts.length === 0 ? <p className="text-sm text-slate-500">空状态</p> : null}
+
+      <div aria-label="搜索结果卡片流" className="grid grid-cols-2 gap-2.5">
+        {displayPosts.map((post) => {
+          const order = getOrder(post.id);
+          const selected = order !== null;
+
+          return (
+            <button
+              aria-controls="candidate-post-detail-dialog"
+              aria-expanded={activePostId === post.id}
+              aria-haspopup="dialog"
+              className={cn(
+                "group relative overflow-hidden rounded-[18px] border bg-slate-50 text-left transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white",
+                selected ? "border-blue-200 bg-blue-50/70" : "border-slate-200"
+              )}
+              key={post.id}
+              onClick={() => setActivePostId(post.id)}
+              type="button"
+            >
+              <img alt={`${post.title} 封面图`} className="aspect-[0.9] w-full object-cover" src={post.imageUrl} />
+              <div className="px-2.5 py-2.5">
+                <p className="truncate text-[12px] font-medium text-slate-700">{post.title}</p>
+              </div>
+
+              {selected ? (
+                <span className="absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-semibold text-white">
+                  {order}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <AnimatePresence>
+        {activePost !== null ? (
+          <motion.div
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/28 px-4"
+            data-state="visible"
+            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }}
+            onClick={() => setActivePostId(null)}
+            role="presentation"
+            transition={{ duration: 0.22, ease: "easeOut" }}
+          >
+            <motion.div
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              aria-labelledby="candidate-post-detail-title"
+              aria-modal="true"
+              className="w-full max-w-2xl rounded-[28px] border border-slate-200 bg-white p-5 shadow-floating"
+              exit={{ opacity: 0, scale: 0.98, y: 10 }}
+              id="candidate-post-detail-dialog"
+              initial={{ opacity: 0, scale: 0.98, y: 12 }}
+              onClick={(event) => event.stopPropagation()}
+              role="dialog"
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">帖子详情</p>
+                  <h3 className="mt-2 text-lg font-semibold text-slate-900" id="candidate-post-detail-title">
+                    {activePost.title}
+                  </h3>
+                </div>
+                <Button aria-label="关闭" onClick={() => setActivePostId(null)} size="icon" type="button" variant="ghost">
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                </Button>
+              </div>
+
+              <div className="mt-4 grid gap-5 md:grid-cols-[240px_minmax(0,1fr)]">
+                <img alt={`${activePost.title} 详情图`} className="w-full rounded-[22px] object-cover" src={activePost.imageUrl} />
+                <div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+                    <span>作者：{activePost.author}</span>
+                    <span>热度：{activePost.heat}</span>
+                  </div>
+                  <p className="mt-4 text-sm leading-7 text-slate-600">{activePost.bodyText}</p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+                <a
+                  className="inline-flex items-center gap-2 text-sm text-slate-500 transition-colors duration-200 hover:text-slate-900"
+                  href={activePost.sourceUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  查看原帖
+                  <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
+                </a>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedOrder.includes(activePost.id) ? (
+                    <>
+                      <Button onClick={() => setSelectedOrder((current) => moveItem(current, activePost.id, "up"))} size="sm" type="button" variant="secondary">
+                        <ArrowUp className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        上移
+                      </Button>
+                      <Button onClick={() => setSelectedOrder((current) => moveItem(current, activePost.id, "down"))} size="sm" type="button" variant="secondary">
+                        <ArrowDown className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        下移
+                      </Button>
+                    </>
+                  ) : null}
+
+                  <Button onClick={() => toggleSelected(activePost.id)} type="button" variant="primary">
+                    <Check className="h-4 w-4" strokeWidth={1.8} />
+                    {selectedOrder.includes(activePost.id) ? "移出已选" : "加入已选"}
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </>
+  );
+}
