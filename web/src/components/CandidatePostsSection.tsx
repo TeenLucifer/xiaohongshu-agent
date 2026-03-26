@@ -100,7 +100,7 @@ export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JS
     <>
       {displayPosts.length === 0 ? <p className="text-sm text-slate-500">空状态</p> : null}
 
-      <div aria-label="搜索结果卡片流" className="grid grid-cols-2 gap-2.5">
+      <div aria-label="搜索结果卡片流" className="flex flex-wrap items-start gap-2">
         {displayPosts.map((post) => {
           const order = getOrder(post.id);
           const selected = order !== null;
@@ -111,20 +111,20 @@ export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JS
               aria-expanded={activePostId === post.id}
               aria-haspopup="dialog"
               className={cn(
-                "group relative overflow-hidden rounded-[18px] border bg-slate-50 text-left transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white",
+                "group relative w-[126px] shrink-0 overflow-hidden rounded-[16px] border bg-slate-50 text-left transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white",
                 selected ? "border-blue-200 bg-blue-50/70" : "border-slate-200"
               )}
               key={post.id}
               onClick={() => setActivePostId(post.id)}
               type="button"
             >
-              <img alt={`${post.title} 封面图`} className="aspect-[0.9] w-full object-cover" src={post.imageUrl} />
-              <div className="px-2.5 py-2.5">
-                <p className="truncate text-[12px] font-medium text-slate-700">{post.title}</p>
+              <img alt={`${post.title} 封面图`} className="aspect-[0.82] w-full object-cover" src={post.imageUrl} />
+              <div className="px-2 py-1.5">
+                <p className="truncate text-[11px] font-medium text-slate-700">{post.title}</p>
               </div>
 
               {selected ? (
-                <span className="absolute right-2 top-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-semibold text-white">
+                <span className="absolute right-1.5 top-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white">
                   {order}
                 </span>
               ) : null}

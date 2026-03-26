@@ -52,6 +52,53 @@ describe("topic workspace feature", () => {
     expect(screen.getByRole("heading", { name: "搜索结果", level: 2 })).toBeInTheDocument();
   });
 
+  it("collapses and expands the left sidebar while keeping the main workspace available", async () => {
+    const user = userEvent.setup();
+    renderWithRoute("/");
+    const shell = screen.getByTestId("workspace-shell");
+    const sidebar = screen.getByTestId("workspace-sidebar");
+
+    await user.click(screen.getByRole("button", { name: "收起侧边栏" }));
+
+    expect(shell).toHaveAttribute("data-left-sidebar", "collapsed");
+    expect(sidebar).toHaveAttribute("data-state", "collapsed");
+    expect(screen.queryByRole("link", { name: /春季通勤穿搭/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开侧边栏" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "当前会话" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "历史记录" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Skills" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "展开侧边栏" }));
+
+    expect(shell).toHaveAttribute("data-left-sidebar", "open");
+    expect(sidebar).toHaveAttribute("data-state", "open");
+    expect(screen.getByRole("button", { name: "当前会话" })).toBeInTheDocument();
+  });
+
+  it("renders the sidebar flush to the viewport edge without rounded corners", () => {
+    renderWithRoute("/");
+
+    const sidebar = screen.getByTestId("workspace-sidebar");
+
+    expect(sidebar.className).toContain("h-screen");
+    expect(sidebar.className).toContain("border-r");
+    expect(sidebar.className).not.toContain("rounded");
+  });
+
+  it("keeps the right panel collapsed when the left sidebar collapses afterward", async () => {
+    const user = userEvent.setup();
+    renderWithRoute("/");
+    const shell = screen.getByTestId("workspace-shell");
+
+    await user.click(screen.getByRole("button", { name: "收起工作区" }));
+    await user.click(screen.getByRole("button", { name: "收起侧边栏" }));
+
+    expect(shell).toHaveAttribute("data-left-sidebar", "collapsed");
+    expect(shell).toHaveAttribute("data-right-context", "collapsed");
+    expect(screen.getByRole("button", { name: "展开工作区" })).toBeInTheDocument();
+  });
+
   it("uses a compact chat composer instead of a large input card", () => {
     renderWithRoute("/");
 

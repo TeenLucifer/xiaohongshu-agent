@@ -10,6 +10,7 @@ import { ImageResultsPanel } from "../components/ImageResultsPanel";
 import { WorkspaceSidebar } from "../components/WorkspaceSidebar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
+import { Surface } from "../components/ui/Surface";
 import {
   mockCandidatePostsByTopicId,
   mockChatMessagesByTopicId,
@@ -46,6 +47,7 @@ export function TopicWorkspacePage(): JSX.Element {
   const topicId = topicIdParam ?? mockTopics[0].id;
   const workspace = mockWorkspaces[topicId];
 
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(true);
   const [expandedGroups, setExpandedGroups] =
     useState<Record<WorkspaceSectionId, boolean>>(defaultExpandedGroups);
@@ -58,6 +60,7 @@ export function TopicWorkspacePage(): JSX.Element {
     setComposerValue("");
     setMessages(mockChatMessagesByTopicId[topicId] ?? []);
     setCopyDraft(mockCopyDraftByTopicId[topicId]);
+    setIsSidebarCollapsed(false);
   }, [topicId]);
 
   const sectionsById = useMemo(() => {
@@ -108,17 +111,32 @@ export function TopicWorkspacePage(): JSX.Element {
 
   return (
     <motion.main
-      animate={{ gridTemplateColumns: isContextOpen ? "248px minmax(0px, 1fr) 380px" : "248px minmax(0px, 1fr) 88px" }}
-      className="grid h-screen gap-4 p-4"
+      animate={{
+        gridTemplateColumns:
+          isSidebarCollapsed && isContextOpen
+            ? "80px minmax(520px, 560px) minmax(640px, 1fr)"
+            : isSidebarCollapsed && !isContextOpen
+              ? "80px minmax(520px, 560px) 88px"
+              : !isSidebarCollapsed && isContextOpen
+                ? "248px minmax(520px, 560px) minmax(560px, 1fr)"
+                : "248px minmax(520px, 560px) 88px"
+      }}
+      className="grid h-screen gap-4 pr-4 pl-0"
+      data-left-sidebar={isSidebarCollapsed ? "collapsed" : "open"}
+      data-right-context={isContextOpen ? "open" : "collapsed"}
       data-state={isContextOpen ? "open" : "collapsed"}
       data-testid="workspace-shell"
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
-      <WorkspaceSidebar currentTopicId={topicId} />
+      <WorkspaceSidebar
+        collapsed={isSidebarCollapsed}
+        currentTopicId={topicId}
+        onToggleCollapse={() => setIsSidebarCollapsed((current) => !current)}
+      />
 
       <section
         aria-label="Agent 对话主栏"
-        className="flex h-[calc(100vh-2rem)] min-w-0 flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 px-6 py-6 shadow-surface"
+        className="my-4 flex h-[calc(100vh-2rem)] min-w-0 self-center flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 px-6 py-6 shadow-surface"
         data-testid="workspace-main-column"
       >
         <div className="mx-auto flex w-full max-w-[720px] items-start justify-between gap-4">
@@ -161,7 +179,7 @@ export function TopicWorkspacePage(): JSX.Element {
 
       <motion.aside
         aria-label="当前工作区"
-        className="h-[calc(100vh-2rem)] overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-surface"
+        className="my-4 h-[calc(100vh-2rem)] self-center overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-surface"
         data-state={isContextOpen ? "open" : "collapsed"}
         data-testid="workspace-context-column"
       >

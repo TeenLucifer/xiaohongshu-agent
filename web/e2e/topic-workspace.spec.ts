@@ -32,22 +32,52 @@ test("renders the chat-first workspace and supports the compact right-side workf
 
   const mainColumn = page.getByTestId("workspace-main-column");
   const contextColumn = page.getByTestId("workspace-context-column");
+  const sidebar = page.getByTestId("workspace-sidebar");
   const mainBefore = await mainColumn.boundingBox();
   const contextBefore = await contextColumn.boundingBox();
+  const sidebarBefore = await sidebar.boundingBox();
 
   expect(mainBefore?.width).toBeTruthy();
   expect(contextBefore?.width).toBeTruthy();
+  expect(sidebarBefore?.width).toBeTruthy();
+  expect(sidebarBefore?.x ?? 999).toBeLessThan(4);
+  expect(sidebarBefore?.y ?? 999).toBeLessThan(4);
+  expect(Math.abs((sidebarBefore?.height ?? 0) - page.viewportSize()!.height)).toBeLessThan(6);
 
+  await page.getByRole("button", { name: "收起侧边栏" }).click();
+  await expect(page.getByRole("button", { name: "展开侧边栏" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "当前会话" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "历史记录" })).toBeVisible();
+  await page.waitForTimeout(350);
+
+  const mainAfterLeftCollapse = await mainColumn.boundingBox();
+  const contextAfterLeftCollapse = await contextColumn.boundingBox();
+  const sidebarAfterLeftCollapse = await sidebar.boundingBox();
+
+  expect(Math.abs((mainAfterLeftCollapse?.width ?? 0) - (mainBefore?.width ?? 0))).toBeLessThan(6);
+  expect((contextAfterLeftCollapse?.width ?? 0) > (contextBefore?.width ?? 0)).toBeTruthy();
+  expect((sidebarAfterLeftCollapse?.width ?? 0) < (sidebarBefore?.width ?? 0)).toBeTruthy();
+
+  await page.getByRole("button", { name: "展开侧边栏" }).click();
   await page.getByRole("button", { name: "收起工作区" }).click();
   await expect(page.getByRole("button", { name: "展开工作区" })).toBeVisible();
   await page.waitForTimeout(350);
 
-  const mainAfter = await mainColumn.boundingBox();
-  const contextAfter = await contextColumn.boundingBox();
-  expect((mainAfter?.width ?? 0) > (mainBefore?.width ?? 0)).toBeTruthy();
-  expect((contextAfter?.width ?? 0) < (contextBefore?.width ?? 0)).toBeTruthy();
+  const mainAfterRightCollapse = await mainColumn.boundingBox();
+  const contextAfterRightCollapse = await contextColumn.boundingBox();
+
+  await page.getByRole("button", { name: "收起侧边栏" }).click();
+  await expect(page.getByRole("button", { name: "展开侧边栏" })).toBeVisible();
+  await page.waitForTimeout(350);
+
+  const mainAfterBothCollapse = await mainColumn.boundingBox();
+  const contextAfterBothCollapse = await contextColumn.boundingBox();
+
+  expect(Math.abs((mainAfterBothCollapse?.width ?? 0) - (mainAfterRightCollapse?.width ?? 0))).toBeLessThan(6);
+  expect(Math.abs((contextAfterBothCollapse?.width ?? 0) - (contextAfterRightCollapse?.width ?? 0))).toBeLessThan(6);
 
   await page.getByRole("button", { name: "展开工作区" }).click();
+  await page.getByRole("button", { name: "展开侧边栏" }).click();
   await expect(page.getByRole("heading", { name: "搜索结果" })).toBeVisible();
 });
 
