@@ -62,12 +62,17 @@
 
 当前还没有正式落地的部分：
 
-- Agent Runtime
-- Skill 协议
+- Agent Runtime 代码实现
+- Session / History 子系统实现
+- Context Memory 子系统实现
 - 后端胶水层
 - 文件化持久层
 
-所以后续如果进入 agent / 后端阶段，应新增新的 feature 编号，不继续把任务堆进 `001~004`。
+当前已经完成但尚未实现代码的部分：
+
+- `010~016` agent 侧 specs
+
+所以后续如果进入 agent / 后端阶段，应继续沿新编号推进，不再把任务堆进 `001~004`。
 
 ## 新 Feature 约定
 
@@ -81,6 +86,23 @@
 - 文件化存储：单独开新 feature
 - 前后端联调：单独开 integration feature
 
+### Agent Runtime
+
+- `010-agent-runtime-foundation`
+  - 主 runtime 薄宿主层、公开接口、ContextBuilder 基础骨架
+- `011-session-history-core`
+  - Session、SessionManager、短期历史与持久化
+- `012-context-memory-core`
+  - 长期记忆、上下文窗口治理与记忆注入
+- `013-agent-loop-runner`
+  - tool-calling loop、本轮执行与停止逻辑
+- `014-agent-tools-core`
+  - 默认文件系统与 shell 工具层
+- `015-agent-skills-loader`
+  - nanobot 风格 skills 扫描与加载
+- `016-agent-local-harness`
+  - 本地 Python 调用入口与 smoke harness
+
 ## 文档边界
 
 - `AGENTS.md`
@@ -91,6 +113,8 @@
   - 放功能设计、任务拆分和验收标准
 - `docs/`
   - 放架构说明、术语表和技术决策
+- `功能.md`
+  - 放项目能力概览，不替代 `specs/`
 
 ## 默认工程要求
 
@@ -102,4 +126,4 @@
 
 ## 备注
 
-如果 `AGENTS.md`、`README.md` 与 `specs/` 出现冲突，默认以 `specs/` 为准。
+如果 `AGENTS.md`、`README.md`、`功能.md` 与 `specs/` 出现冲突，默认以 `specs/` 为准。

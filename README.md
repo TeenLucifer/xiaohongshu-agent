@@ -4,22 +4,22 @@
 
 它的目标不是做通用聊天机器人，而是围绕一个明确的话题工作区，把素材整理、帖子搜集、内容总结、文案创作和图片创作串成一条可控的创作链路。
 
-当前仓库处于早期阶段：前端工作台原型已经完成，Agent Runtime 和后端胶水层正在设计中。
+当前仓库处于早期阶段：前端工作台原型已经完成，agent 侧 `010~016` specs 已成型，代码实现尚未开始。
 
 ## 项目定位
 
 这个项目聚焦三个方向：
 
-- 以“话题”作为工作单元，沉淀一次运营任务的全部上下文
+- 以“话题”作为产品层工作单元，沉淀一次运营任务的全部上下文
 - 以“一个主 Agent + 多个 Skills”的方式组织能力，而不是堆多个对等 Agent
 - 以前端工作台承载人工决策，以后端持久化和编排能力承载系统真相
 
 当前已经明确的产品形态是：
 
-- 一个话题对应一个长期会话
-- 帖子搜集是主 Agent 的核心能力
-- 模式总结、文案创作、图片创作作为 Skills 挂在同一个 Agent 下
-- 每一步由前端或后端显式指定当前 skill 执行
+- 产品围绕话题组织工作区
+- runtime 围绕 session 执行与复用上下文
+- 帖子搜集、模式总结、文案创作、图片创作作为 skills 挂在同一个主 agent 下
+- session/history、memory、loop、tools、skills loader、local harness 已经拆成独立 specs
 
 ## 当前状态
 
@@ -33,15 +33,16 @@
 当前还没有正式落地：
 
 - Python Agent Runtime
+- session/history 子系统
+- context memory 子系统
+- loop、tools、skills loader、local harness
 - 后端编排与文件化持久层
-- 浏览器自动化搜集链路
-- Skills 安装与执行协议
 
 也就是说，这个仓库现在更像一个“前端原型 + 后端/Agent 设计中的单仓工程”，而不是一个已经完工的全栈产品。
 
 ## 核心思路
 
-项目围绕“话题”组织数据和流程。
+项目在产品层围绕“话题”组织数据和流程，在 runtime 层围绕 `session` 执行。
 
 每个话题后续会沉淀：
 
@@ -55,7 +56,7 @@
 - Agent 会话记录
 - Skill 运行记录
 
-首版后端会以“纯文件化”作为真相层：
+后续后端会以“纯文件化”作为真相层：
 
 - 每个话题一个目录
 - 目录下按对象拆分小文件
@@ -89,7 +90,8 @@ docs/    架构、术语和技术决策
 其中：
 
 - `specs/001~004` 当前对应前端工作台相关能力
-- 后续 Agent 与后端会进入新的 feature 编号，而不是继续堆到前端 spec 里
+- `specs/010~016` 当前对应 agent runtime 相关能力
+- 后续 backend glue 和持久化能力会继续进入新的 feature 编号
 
 ## 快速开始
 
@@ -129,10 +131,10 @@ npm run build
 
 接下来的工作重点是：
 
-- 设计并实现主 Agent Runtime
-- 定义 Skill 协议
-- 建立话题级纯文件化持久层
-- 增加后端胶水层，把前端工作台和 Agent 执行链路接起来
+- 实现主 agent runtime
+- 实现 session/history 与 context memory 子系统
+- 实现 loop、tools、skills loader 和 local harness
+- 建立文件化真相层与后端胶水层
 
 ## 说明
 
