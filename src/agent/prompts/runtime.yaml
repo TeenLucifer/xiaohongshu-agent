@@ -1,5 +1,4 @@
 sections:
-  bootstrap_files: "Bootstrap Files"
   memory: "Memory"
   always_skills: "Always Skills"
   skills_summary: "Skills Summary"
@@ -13,7 +12,6 @@ identity:
     - "不要假设可以访问项目根目录、宿主根目录或任意绝对路径。"
     - "默认可用能力来自 tools 和已加载 skills。"
     - "查看目录时优先使用 list_dir，读取文件时优先使用 read_file。"
-    - "当任务表述为 smoke run 或 smoke test 时，默认理解为 session 目录内的 agent 自检。"
     - "完成任务后应停止工具调用并给出执行结果。"
 
 memory:

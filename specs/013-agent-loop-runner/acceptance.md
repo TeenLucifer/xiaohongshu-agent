@@ -24,6 +24,19 @@
    - `result_summary`
 18. 准备多个可用 skill
 19. 确认 agent 能基于 skills summary 自主选择 skill
+20. 在启用 trace 的本地联调场景下运行一次 loop
+21. 确认 trace 中能看到：
+   - run 开始/结束
+   - 每轮发给模型的 `iteration_input`
+   - 每轮模型返回的 `iteration_output`
+   - 迭代轮次
+   - 每轮是否有 tool calls
+   - tool 调用摘要
+   - 正常结束或触达最大轮数的结束原因
+22. 检查 `iteration_input`
+23. 确认其中包含完整 `system_prompt`、完整 `messages` 和完整 `tool_definitions`
+24. 检查 `iteration_output`
+25. 确认其中包含完整 `content` 和完整 `tool_calls`
 
 ## 自动化验收
 
@@ -38,6 +51,10 @@
 - batched tool calls 按原顺序回灌测试通过
 - `RunResult.tool_calls` 摘要结构测试通过
 - skill 自主选择测试通过
+- loop trace 事件测试通过
+- 逐轮 `iteration_input` trace 测试通过
+- 逐轮 `iteration_output` trace 测试通过
+- 完整 `tool_definitions` trace 测试通过
 
 ## 已知限制
 

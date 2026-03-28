@@ -12,9 +12,11 @@ from agent.local_harness.cli import (
     parse_metadata,
     run_local,
 )
+from agent.loop_runner import LoopModelResponse, LoopRunner
 from agent.models import RunResult, ToolCallSummary
 from agent.runtime import AgentRuntime
 from agent.session.models import SessionSnapshot
+from agent.trace import SessionTraceCollector
 
 
 class StubRuntime:
@@ -130,6 +132,24 @@ def test_cli_parser_and_metadata_json() -> None:
     assert parse_metadata(args.metadata) == {"source": "smoke"}
 
 
+def test_cli_parser_accepts_trace_full() -> None:
+    parser = build_parser()
+
+    args = parser.parse_args(
+        [
+            "run",
+            "--topic",
+            "话题",
+            "--user-input",
+            "执行",
+            "--trace-full",
+        ]
+    )
+
+    assert args.trace is False
+    assert args.trace_full is True
+
+
 def test_run_local_rejects_invalid_session_and_topic_combination() -> None:
     runtime = StubRuntime()
 
@@ -234,3 +254,135 @@ def test_minimal_smoke_run_with_real_runtime(tmp_path: Path) -> None:
     )
 
     assert result.final_text == "smoke ok"
+
+
+def test_trace_creates_session_log_file_and_reports_path(tmp_path: Path, capsys) -> None:
+    class StubModelClient:
+        def complete(self, **kwargs: object) -> LoopModelResponse:
+            _ = kwargs
+            return LoopModelResponse(content="done")
+
+    def factory() -> AgentRuntime:
+        return AgentRuntime(
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            loop_runner=LoopRunner(model_client=StubModelClient()),
+        )
+
+    exit_code = main(
+        [
+            "run",
+            "--topic",
+            "trace",
+            "--user-input",
+            "smoke run",
+            "--trace",
+        ],
+        runtime_factory=factory,
+    )
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "trace_file:" in out
+    trace_path = Path(out.split("trace_file:", 1)[1].strip())
+    assert trace_path.exists()
+    content = trace_path.read_text(encoding="utf-8")
+    assert "===== RUN START =====" in content
+    started_line = next(line for line in content.splitlines() if line.startswith("started_at: "))
+    ended_line = next(line for line in content.splitlines() if line.startswith("ended_at: "))
+    started_at = _dt(started_line.split(": ", 1)[1])
+    ended_at = _dt(ended_line.split(": ", 1)[1])
+    started_offset = started_at.utcoffset()
+    ended_offset = ended_at.utcoffset()
+    assert started_offset is not None
+    assert started_offset.total_seconds() == 8 * 3600
+    assert ended_offset is not None
+    assert ended_offset.total_seconds() == 8 * 3600
+    assert "trace_mode: summary" in content
+    assert "raw_user_input:" in content
+    assert "normalized_user_input:" in content
+    assert "workspace_path:" in content
+    assert "[prompt] summary" in content
+    assert "[prompt] iteration_input" not in content
+    assert "[model] iteration_output" not in content
+    assert "- system_prompt:" not in content
+    assert "- messages:" not in content
+    assert "- tool_definitions:" not in content
+    assert "[loop] end" in content
+
+
+def test_trace_full_writes_complete_prompt_and_model_payloads(tmp_path: Path, capsys) -> None:
+    class StubModelClient:
+        def complete(self, **kwargs: object) -> LoopModelResponse:
+            _ = kwargs
+            return LoopModelResponse(content="done")
+
+    def factory() -> AgentRuntime:
+        return AgentRuntime(
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            loop_runner=LoopRunner(model_client=StubModelClient()),
+        )
+
+    exit_code = main(
+        [
+            "run",
+            "--topic",
+            "trace",
+            "--user-input",
+            "smoke run",
+            "--trace-full",
+        ],
+        runtime_factory=factory,
+    )
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    trace_path = Path(out.split("trace_file:", 1)[1].strip())
+    content = trace_path.read_text(encoding="utf-8")
+
+    assert "trace_mode: full" in content
+    assert "[prompt] iteration_input" in content
+    assert "[model] iteration_output" in content
+    assert "- system_prompt:" in content
+    assert "- messages:" in content
+    assert "- tool_definitions:" in content
+    assert '"input_schema"' in content
+    assert "- content: done" in content
+
+
+def test_trace_redacts_sensitive_fields_by_name(tmp_path: Path) -> None:
+    collector = SessionTraceCollector(
+        session_id="sess-1",
+        topic="trace",
+        workspace_path=tmp_path / "workspace",
+        raw_user_input="执行",
+        normalized_user_input="执行",
+        mode="full",
+    )
+    collector.record(
+        category="prompt",
+        event="iteration_input",
+        data={
+            "tool_definitions": [
+                {
+                    "name": "exec",
+                    "input_schema": {
+                        "properties": {
+                            "api_key": {"type": "string"},
+                            "normal_field": {"type": "string"},
+                        }
+                    },
+                }
+            ],
+            "authorization": "Bearer secret",
+            "normal_field": "visible",
+        },
+    )
+
+    trace_path = collector.write_run_block(final_text="done", artifacts=[])
+    content = trace_path.read_text(encoding="utf-8")
+
+    assert "[REDACTED]" in content
+    assert "Bearer secret" not in content
+    assert "- normal_field: visible" in content

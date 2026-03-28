@@ -19,6 +19,16 @@ def write_skill(
     return path
 
 
+def write_nested_skill(
+    parent_dir: Path,
+    name: str,
+    *,
+    frontmatter: str,
+    body: str = "skill body",
+) -> Path:
+    return write_skill(parent_dir / "skills", name, frontmatter=frontmatter, body=body)
+
+
 def test_list_skills_prefers_workspace_over_builtin(tmp_path: Path) -> None:
     builtin = tmp_path / "builtin"
     workspace = tmp_path / "workspace"
@@ -67,6 +77,36 @@ def test_frontmatter_and_metadata_json_are_parsed(tmp_path: Path) -> None:
 
     assert record.metadata["name"] == "demo"
     assert record.metadata["description"] == "desc"
+    assert record.nanobot_metadata["always"] is True
+    assert record.nanobot_metadata["requires"]["bins"] == ["python3"]
+
+
+def test_frontmatter_supports_yaml_multiline_description_and_nested_metadata(
+    tmp_path: Path,
+) -> None:
+    builtin = tmp_path / "builtin"
+    write_skill(
+        builtin,
+        "demo",
+        frontmatter=(
+            "name: demo\n"
+            "description: |\n"
+            "  第一行描述\n"
+            "  第二行描述\n"
+            "metadata:\n"
+            "  openclaw:\n"
+            "    always: true\n"
+            "    requires:\n"
+            "      bins:\n"
+            "        - python3\n"
+        ),
+    )
+    loader = SkillsLoader(builtin_skills_dir=builtin)
+
+    record = loader.require_skill("demo")
+
+    assert record.description == "第一行描述\n第二行描述\n"
+    assert record.metadata["description"] == "第一行描述\n第二行描述\n"
     assert record.nanobot_metadata["always"] is True
     assert record.nanobot_metadata["requires"]["bins"] == ["python3"]
 
@@ -137,6 +177,22 @@ def test_build_skills_summary_includes_unavailable_skills(tmp_path: Path) -> Non
     assert '<skill available="false">' in summary
     assert "<name>blocked</name>" in summary
     assert "<requires>CLI: missing-bin</requires>" in summary
+
+
+def test_build_skills_summary_includes_real_description_and_location(tmp_path: Path) -> None:
+    builtin = tmp_path / "builtin"
+    path = write_skill(
+        builtin,
+        "demo",
+        frontmatter=("name: demo\ndescription: |\n  小红书发布技能\n  支持图文内容草稿\n"),
+    )
+    loader = SkillsLoader(builtin_skills_dir=builtin)
+
+    summary = loader.build_skills_summary()
+
+    assert "<name>demo</name>" in summary
+    assert "<description>小红书发布技能\n支持图文内容草稿\n</description>" in summary
+    assert f"<location>{path}</location>" in summary
 
 
 def test_get_always_skills_returns_only_available_ones(tmp_path: Path) -> None:
@@ -211,3 +267,154 @@ def test_runtime_loader_return_type_is_structured(tmp_path: Path) -> None:
     skills = loader.list_skills(filter_unavailable=False)
 
     assert isinstance(skills[0], SkillRecord)
+
+
+def test_list_skills_discovers_parent_and_nested_skills(tmp_path: Path) -> None:
+    builtin = tmp_path / "builtin"
+    parent_dir = builtin / "xiaohongshu-skills"
+    write_skill(
+        builtin,
+        "xiaohongshu-skills",
+        frontmatter="name: xiaohongshu-skills\ndescription: parent skill",
+    )
+    write_nested_skill(
+        parent_dir,
+        "xhs-auth",
+        frontmatter="name: xhs-auth\ndescription: auth skill",
+    )
+    write_nested_skill(
+        parent_dir,
+        "xhs-publish",
+        frontmatter="name: xhs-publish\ndescription: publish skill",
+    )
+    loader = SkillsLoader(builtin_skills_dir=builtin)
+
+    skills = loader.list_skills(filter_unavailable=False)
+
+    assert [skill.name for skill in skills] == [
+        "xiaohongshu-skills",
+        "xhs-auth",
+        "xhs-publish",
+    ]
+
+
+def test_recursive_discovery_only_walks_nested_skills_container(tmp_path: Path) -> None:
+    builtin = tmp_path / "builtin"
+    parent_dir = builtin / "xiaohongshu-skills"
+    write_skill(
+        builtin,
+        "xiaohongshu-skills",
+        frontmatter="name: xiaohongshu-skills\ndescription: parent skill",
+    )
+    scripts_dir = parent_dir / "scripts" / "fake-skill"
+    scripts_dir.mkdir(parents=True, exist_ok=True)
+    (scripts_dir / "SKILL.md").write_text(
+        "---\nname: fake-skill\ndescription: should not load\n---\n",
+        encoding="utf-8",
+    )
+    assets_dir = parent_dir / "assets" / "fake-asset-skill"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    (assets_dir / "SKILL.md").write_text(
+        "---\nname: fake-asset-skill\ndescription: should not load\n---\n",
+        encoding="utf-8",
+    )
+    write_nested_skill(
+        parent_dir,
+        "xhs-auth",
+        frontmatter="name: xhs-auth\ndescription: auth skill",
+    )
+    loader = SkillsLoader(builtin_skills_dir=builtin)
+
+    skills = loader.list_skills(filter_unavailable=False)
+
+    assert [skill.name for skill in skills] == ["xiaohongshu-skills", "xhs-auth"]
+
+
+def test_recursive_discovery_skips_noise_directories(tmp_path: Path) -> None:
+    builtin = tmp_path / "builtin"
+    parent_dir = builtin / "xiaohongshu-skills"
+    write_skill(
+        builtin,
+        "xiaohongshu-skills",
+        frontmatter="name: xiaohongshu-skills\ndescription: parent skill",
+    )
+    for dirname in (".git", "node_modules", "__pycache__", ".hidden"):
+        noise_dir = parent_dir / "skills" / dirname / "ignored"
+        noise_dir.mkdir(parents=True, exist_ok=True)
+        (noise_dir / "SKILL.md").write_text(
+            "---\nname: ignored\ndescription: should not load\n---\n",
+            encoding="utf-8",
+        )
+    write_nested_skill(
+        parent_dir,
+        "xhs-auth",
+        frontmatter="name: xhs-auth\ndescription: auth skill",
+    )
+    loader = SkillsLoader(builtin_skills_dir=builtin)
+
+    skills = loader.list_skills(filter_unavailable=False)
+
+    assert [skill.name for skill in skills] == ["xiaohongshu-skills", "xhs-auth"]
+
+
+def test_same_source_recursive_collision_keeps_first_discovered_skill(tmp_path: Path) -> None:
+    builtin = tmp_path / "builtin"
+    parent_dir = builtin / "xiaohongshu-skills"
+    write_skill(
+        builtin,
+        "alpha-parent",
+        frontmatter="name: alpha-parent\ndescription: alpha parent",
+    )
+    write_nested_skill(
+        builtin / "alpha-parent",
+        "shared-skill",
+        frontmatter="name: shared-skill\ndescription: first skill",
+    )
+    write_skill(
+        builtin,
+        "xiaohongshu-skills",
+        frontmatter="name: xiaohongshu-skills\ndescription: parent skill",
+    )
+    write_nested_skill(
+        parent_dir,
+        "shared-skill",
+        frontmatter="name: shared-skill\ndescription: second skill",
+    )
+    loader = SkillsLoader(builtin_skills_dir=builtin)
+
+    record = loader.require_skill("shared-skill")
+
+    assert record.description == "first skill"
+
+
+def test_workspace_nested_skill_overrides_builtin_nested_skill(tmp_path: Path) -> None:
+    builtin = tmp_path / "builtin"
+    workspace = tmp_path / "workspace"
+    builtin_parent = builtin / "xiaohongshu-skills"
+    workspace_parent = workspace / "skills" / "xiaohongshu-skills"
+    write_skill(
+        builtin,
+        "xiaohongshu-skills",
+        frontmatter="name: xiaohongshu-skills\ndescription: builtin parent",
+    )
+    write_nested_skill(
+        builtin_parent,
+        "xhs-auth",
+        frontmatter="name: xhs-auth\ndescription: builtin auth",
+    )
+    write_skill(
+        workspace / "skills",
+        "xiaohongshu-skills",
+        frontmatter="name: xiaohongshu-skills\ndescription: workspace parent",
+    )
+    write_nested_skill(
+        workspace_parent,
+        "xhs-auth",
+        frontmatter="name: xhs-auth\ndescription: workspace auth",
+    )
+    loader = SkillsLoader(builtin_skills_dir=builtin)
+
+    record = loader.require_skill("xhs-auth", workspace_path=workspace)
+
+    assert record.source == "workspace"
+    assert record.description == "workspace auth"

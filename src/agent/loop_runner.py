@@ -16,6 +16,7 @@ from agent.models import PromptMessage, RunRequest, RunResult, ToolCallPayload, 
 from agent.session.models import Session, SessionMessage
 from agent.skills.loader import SkillsLoader
 from agent.tools.registry import ToolDefinition, ToolsRegistry
+from agent.trace import TraceSink
 
 MAX_ITERATIONS = 20
 MAX_ITERATIONS_FALLBACK_TEXT = "已达到最大工具调用轮数（20），任务仍未完成。建议将任务拆分后重试。"
@@ -67,11 +68,14 @@ class LoopRunner:
         *,
         model_client: LoopModelClient | None = None,
         memory_consolidator: MemoryHook | None = None,
+        trace_sink: TraceSink | None = None,
         max_iterations: int = MAX_ITERATIONS,
     ) -> None:
         self.model_client = model_client
         self.memory_consolidator = memory_consolidator
+        self.trace_sink = trace_sink
         self.max_iterations = max_iterations
+        self.last_post_check_handle: object | None = None
 
     def run(
         self,
@@ -97,9 +101,48 @@ class LoopRunner:
         )
         tool_definitions = tools_registry.list_tool_definitions()
         tool_summaries: list[ToolCallSummary] = []
+        self._record_trace(
+            category="run",
+            event="start",
+            data={
+                "session_id": session.session_id,
+                "topic": session.topic or "",
+                "workspace_path": str(session.workspace_path),
+            },
+        )
+        self._record_trace(
+            category="prompt",
+            event="summary",
+            data=self._build_prompt_summary(
+                session=session,
+                system_prompt=messages[0].content,
+                skills_summary=skills_loader.build_skills_summary(
+                    workspace_path=session.workspace_path
+                ),
+            ),
+        )
 
-        for _ in range(self.max_iterations):
+        for iteration in range(self.max_iterations):
+            self._record_trace(
+                category="prompt",
+                event="iteration_input",
+                data={
+                    "iteration": iteration + 1,
+                    "system_prompt": messages[0].content,
+                    "messages": _serialize_prompt_messages(messages),
+                    "tool_definitions": _serialize_tool_definitions(tool_definitions),
+                },
+            )
             response = self._complete(messages=messages, tool_definitions=tool_definitions)
+            self._record_trace(
+                category="model",
+                event="iteration_output",
+                data={
+                    "iteration": iteration + 1,
+                    "content": response.content,
+                    "tool_calls": _serialize_tool_calls(response.tool_calls),
+                },
+            )
             assistant_prompt = PromptMessage(
                 role="assistant",
                 content=response.content,
@@ -112,10 +155,27 @@ class LoopRunner:
             )
             messages.append(assistant_prompt)
             session.add_message(assistant_session)
+            self._record_trace(
+                category="loop",
+                event="iteration",
+                data={
+                    "iteration": iteration + 1,
+                    "tool_call_count": len(response.tool_calls),
+                    "has_tool_calls": bool(response.tool_calls),
+                },
+            )
 
             if not response.tool_calls:
                 save_session(session)
                 self._schedule_post_check(session)
+                self._record_trace(
+                    category="loop",
+                    event="end",
+                    data={
+                        "reason": "no_tool_calls",
+                        "iterations": iteration + 1,
+                    },
+                )
                 return RunResult(
                     session_id=session.session_id,
                     final_text=response.content,
@@ -142,18 +202,39 @@ class LoopRunner:
                 )
                 messages.append(tool_prompt)
                 session.add_message(tool_session)
+                argument_summary = _summarize_arguments(tool_call.arguments)
+                result_summary = _summarize_result(result_text)
                 tool_summaries.append(
                     ToolCallSummary(
                         name=tool_call.name,
-                        arguments_summary=_summarize_arguments(tool_call.arguments),
-                        result_summary=_summarize_result(result_text),
+                        arguments_summary=argument_summary,
+                        result_summary=result_summary,
                     )
+                )
+                self._record_trace(
+                    category="tool",
+                    event="call",
+                    data={
+                        "iteration": iteration + 1,
+                        "name": tool_call.name,
+                        "arguments_summary": argument_summary,
+                        "result_summary": result_summary,
+                        "status": "error" if result_text.startswith("Error: ") else "ok",
+                    },
                 )
 
         fallback_message = SessionMessage(role="assistant", content=MAX_ITERATIONS_FALLBACK_TEXT)
         session.add_message(fallback_message)
         save_session(session)
         self._schedule_post_check(session)
+        self._record_trace(
+            category="loop",
+            event="end",
+            data={
+                "reason": "max_iterations",
+                "iterations": self.max_iterations,
+            },
+        )
         return RunResult(
             session_id=session.session_id,
             final_text=MAX_ITERATIONS_FALLBACK_TEXT,
@@ -230,7 +311,34 @@ class LoopRunner:
     def _schedule_post_check(self, session: Session) -> None:
         if self.memory_consolidator is None:
             return
-        self.memory_consolidator.schedule_post_check(session)
+        self.last_post_check_handle = self.memory_consolidator.schedule_post_check(session)
+
+    def _record_trace(
+        self,
+        *,
+        category: str,
+        event: str,
+        data: dict[str, Any],
+    ) -> None:
+        if self.trace_sink is None:
+            return
+        self.trace_sink.record(category=category, event=event, data=data)
+
+    def _build_prompt_summary(
+        self,
+        *,
+        session: Session,
+        system_prompt: str,
+        skills_summary: str,
+    ) -> dict[str, Any]:
+        return {
+            "has_memory_rules": "## Memory Usage Rules" in system_prompt,
+            "has_memory_context": "## Long-term Memory" in system_prompt,
+            "has_always_skills": "# Always Skills" in system_prompt,
+            "skills": ",".join(_extract_skill_names(skills_summary)),
+            "history_message_count": len(session.get_history()),
+            "last_consolidated": session.last_consolidated,
+        }
 
 
 def _stringify_result(result: object) -> str:
@@ -253,3 +361,58 @@ def _truncate_text(value: str, *, max_length: int = SUMMARY_MAX_LENGTH) -> str:
     if len(value) <= max_length:
         return value
     return value[: max_length - 3] + "..."
+
+
+def _extract_skill_names(skills_summary: str) -> list[str]:
+    names: list[str] = []
+    marker = "<name>"
+    end_marker = "</name>"
+    start = 0
+    while True:
+        left = skills_summary.find(marker, start)
+        if left == -1:
+            return names
+        right = skills_summary.find(end_marker, left)
+        if right == -1:
+            return names
+        names.append(skills_summary[left + len(marker) : right])
+        start = right + len(end_marker)
+
+
+def _serialize_prompt_messages(messages: list[PromptMessage]) -> list[dict[str, Any]]:
+    serialized: list[dict[str, Any]] = []
+    for message in messages:
+        item: dict[str, Any] = {
+            "role": message.role,
+            "content": message.content,
+        }
+        if message.tool_calls:
+            item["tool_calls"] = _serialize_tool_calls(message.tool_calls)
+        if message.tool_call_id is not None:
+            item["tool_call_id"] = message.tool_call_id
+        if message.name is not None:
+            item["name"] = message.name
+        serialized.append(item)
+    return serialized
+
+
+def _serialize_tool_calls(tool_calls: list[ToolCallPayload]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": tool_call.id,
+            "name": tool_call.name,
+            "arguments": tool_call.arguments,
+        }
+        for tool_call in tool_calls
+    ]
+
+
+def _serialize_tool_definitions(tool_definitions: list[ToolDefinition]) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": definition.name,
+            "description": definition.description,
+            "input_schema": definition.input_schema,
+        }
+        for definition in tool_definitions
+    ]

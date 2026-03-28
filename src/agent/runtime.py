@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from agent.context_builder import ContextBuilder
 from agent.errors import RuntimeInitializationError
@@ -15,6 +15,7 @@ from agent.session.manager import SessionManager
 from agent.session.models import SessionSnapshot
 from agent.skills.loader import SkillsLoader
 from agent.tools.registry import ToolsRegistry
+from agent.trace import TraceSink
 
 
 class AgentRuntime:
@@ -45,6 +46,7 @@ class AgentRuntime:
         self.provider_config = provider_config
         self.model_client = model_client
         self.loop_runner = loop_runner or LoopRunner(model_client=model_client)
+        self._trace_sink: TraceSink | None = None
 
     def create_session(
         self,
@@ -67,6 +69,8 @@ class AgentRuntime:
         session = self.session_manager.require(request.session_id)
         self._ensure_model_client()
         self._ensure_memory_consolidator()
+        if isinstance(self.loop_runner, LoopRunner):
+            self.loop_runner.trace_sink = self._trace_sink
         extra_allowed_dirs = [session.workspace_path / "tmp"]
         metadata_extra_dirs = request.metadata.get("extra_allowed_dirs", [])
         if isinstance(metadata_extra_dirs, list):
@@ -109,6 +113,9 @@ class AgentRuntime:
         if not hasattr(self.loop_runner, "memory_consolidator"):
             return
         if self.loop_runner.memory_consolidator is not None:
+            existing_hook: Any = self.loop_runner.memory_consolidator
+            if hasattr(existing_hook, "trace_sink"):
+                cast(Any, existing_hook).trace_sink = self._trace_sink
             return
         if self.model_client is None:
             return
@@ -116,4 +123,5 @@ class AgentRuntime:
             agent=DefaultMemoryConsolidationAgent(model_client=self.model_client),
             context_window_tokens=self._DEFAULT_CONTEXT_WINDOW_TOKENS,
             max_completion_tokens=self._DEFAULT_MAX_COMPLETION_TOKENS,
+            trace_sink=self._trace_sink,
         )

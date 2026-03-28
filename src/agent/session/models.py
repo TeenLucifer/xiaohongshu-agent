@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from agent.models import PromptMessage, SessionMessageRole, ToolCallPayload
+from agent.time_utils import now_local
 
 TOOL_CONTENT_MAX_LENGTH = 4_000
 TOOL_CONTENT_TRUNCATION_SUFFIX = "\n...[truncated]"
@@ -31,7 +32,7 @@ class SessionMessage(BaseModel):
 
     role: SessionMessageRole
     content: str
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    timestamp: datetime = Field(default_factory=now_local)
     tool_calls: list[ToolCallPayload] = Field(default_factory=list)
     tool_call_id: str | None = None
     name: str | None = None
@@ -56,8 +57,8 @@ class Session(BaseModel):
     messages: list[SessionMessage] = Field(default_factory=list)
     last_consolidated: int = 0
     workspace_path: Path
-    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory=now_local)
+    updated_at: datetime = Field(default_factory=now_local)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     def snapshot(self) -> SessionSnapshot:
@@ -81,7 +82,7 @@ class Session(BaseModel):
         elif normalized.role == "user":
             normalized.content = _strip_runtime_context(normalized.content)
         self.messages.append(normalized)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = now_local()
 
     def get_history(self, max_messages: int = 500) -> list[PromptMessage]:
         """Return the legal unconsolidated history slice for model input."""
@@ -99,13 +100,13 @@ class Session(BaseModel):
 
         self.messages = []
         self.last_consolidated = 0
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = now_local()
 
     def mark_consolidated(self, boundary: int) -> None:
         """Advance the consolidation cursor after successful persistence."""
 
         self.last_consolidated = max(self.last_consolidated, boundary)
-        self.updated_at = datetime.now(UTC)
+        self.updated_at = now_local()
 
     @staticmethod
     def _find_legal_start(messages: list[SessionMessage]) -> int:

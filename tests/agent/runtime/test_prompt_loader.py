@@ -14,7 +14,6 @@ def test_runtime_prompt_loader_reads_yaml_config(tmp_path: Path) -> None:
         "\n".join(
             [
                 "sections:",
-                '  bootstrap_files: "Bootstrap Files"',
                 '  memory: "Memory"',
                 '  always_skills: "Always Skills"',
                 '  skills_summary: "Skills Summary"',

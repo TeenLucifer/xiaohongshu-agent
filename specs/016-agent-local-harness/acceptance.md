@@ -23,10 +23,37 @@
 19. 确认输出为结构化结果，包含 `session_id / final_text / tool_calls / artifacts`
 20. 使用 `--verbose` 运行
 21. 确认会显示更多 tool 摘要与调试信息
-22. 使用 `smoke run` 或 `smoke test` 作为输入运行
-23. 确认 harness 会将其转成明确的 session 自检任务，而不是原样把模糊文本直接交给模型
-24. 在空 session 目录中运行上述输入
-25. 确认默认行为是目录自检与最小文件读写闭环，而不是因为“没有代码”直接判定 smoke 无法执行
+22. 使用 `--trace` 运行一次本地 harness
+23. 确认当前 `session workspace` 下自动创建：
+   - `logs/agent-trace.log`
+24. 确认终端输出中包含 trace 文件路径
+25. 打开 `agent-trace.log`
+26. 确认本次 run 以 `RUN START / RUN END` block 追加写入
+27. 确认 block 至少包含：
+   - `session_id`
+   - 原始 `user_input`
+   - 规范化后的 `user_input`
+   - `workspace_path`
+   - prompt 关键 section 摘要
+   - memory 检查摘要
+   - loop 摘要
+   - tool 调用摘要
+   - `final_text`
+28. 使用 `--trace-full` 运行一次本地 harness
+29. 确认 block 中额外包含：
+   - 每轮完整 `system_prompt`
+   - 每轮发给模型的 `messages`
+   - 每轮完整 `tool_definitions`
+   - 每轮模型返回的 `content`
+   - 每轮模型返回的 `tool_calls`
+30. 使用 `smoke run` 或 `smoke test` 作为输入运行
+31. 确认 harness 会将其转成明确的 session 自检任务，而不是原样把模糊文本直接交给模型
+32. 在空 session 目录中运行上述输入
+33. 确认默认行为是目录自检与最小文件读写闭环，而不是因为“没有代码”直接判定 smoke 无法执行
+34. 使用同一 `session_id` 再次运行并开启 `--trace`
+35. 确认 `agent-trace.log` 中追加了新的 run block，而不是覆盖旧内容
+36. 在 trace 中构造明显敏感字段名
+37. 确认 `api_key`、`authorization`、`cookie`、`token` 等值被最小脱敏，而不是原样落盘
 
 ## 自动化验收
 
@@ -40,9 +67,20 @@
 - 退出码测试通过
 - 最小 smoke run 测试通过
 - `smoke run` 语义规范化测试通过
+- `--trace` 参数解析测试通过
+- `--trace-full` 参数解析测试通过
+- trace 文件创建与追加测试通过
+- trace 路径输出测试通过
+- trace block 内容摘要测试通过
+- 逐轮 prompt/messages trace 测试通过
+- 完整 `system_prompt` trace 测试通过
+- 完整 `tool_definitions` trace 测试通过
+- 逐轮模型输出 trace 测试通过
+- trace 最小脱敏测试通过
 
 ## 已知限制
 
 - 当前不是后端正式调用入口
 - 当前不负责完整持久化回写
 - 当前 CLI 只提供单命令 smoke 入口，不提供完整 session 管理控制台
+- 当前 trace 首版只提供人类可读文本日志，不提供结构化 JSON trace

@@ -65,6 +65,7 @@
 - 基于 `session_id` 运行一次 agent 调用
 - 读取 session 快照
 - 串联 session、context、skills、tools、provider、loop
+- 通过内部轻量时间入口为 runtime 子系统提供统一时间来源
 
 `AgentRuntime` 不负责：
 
@@ -91,25 +92,9 @@
 固定顺序：
 
 1. `identity + runtime rules`
-2. `bootstrap files`
-3. `memory`
-4. `always skills`
-5. `skills summary`
-
-### bootstrap files
-
-固定四件套，顺序固定为：
-
-1. `AGENTS.md`
-2. `SOUL.md`
-3. `USER.md`
-4. `TOOLS.md`
-
-规则：
-
-- 文件存在则拼入 system prompt
-- 文件缺失直接跳过
-- 缺失不报错
+2. `memory`
+3. `always skills`
+4. `skills summary`
 
 ### memory / always skills / skills summary
 
@@ -136,6 +121,10 @@ always skills 规则：
 作用：
 
 - 注入所有可用 skills 的 metadata summary
+- summary 中至少包含：
+  - `name`
+  - `description`
+  - `location`
 - 提醒模型如需使用某个 skill，应先读取对应 `SKILL.md`
 
 ### build_messages()
@@ -170,13 +159,18 @@ always skills 规则：
 - metadata only
 - not instructions
 
+其中：
+
+- `Current Time` 来自 runtime 内部统一时间入口
+- 首版固定使用 `Asia/Shanghai`
+- 首版不做时区配置化
+
 ### identity + runtime rules 约束补充
 
 `ContextBuilder` 的系统级规则必须明确：
 
 - agent 只能在当前 `session workspace` 内工作
 - 不要假设可访问项目根目录、宿主根目录或任意绝对路径
-- 当任务表述为 `smoke run` / `smoke test` 时，默认应理解为 session 目录内的 agent 自检
 - 查看目录优先使用 `list_dir`
 - 读取文件优先使用 `read_file`
 
@@ -185,11 +179,18 @@ always skills 规则：
 - `ContextBuilder` 中的静态提示词文案可以由内部 YAML 配置提供
 - 静态提示词配置只承载固定文案，不承载运行时条件逻辑
 - 动态拼装职责仍保留在 `ContextBuilder`：
-  - bootstrap files
   - memory
   - always skills
   - skills summary
   - runtime context
+
+### 内部时间入口边界
+
+- runtime 允许持有一个很薄的内部时间 helper，用于统一提供当前时间
+- 该 helper 只负责固定时区下的“当前时间”和基础格式一致性
+- 首版固定时区为 `Asia/Shanghai`
+- 不引入复杂时钟服务、调度器或可配置时区管理
+- session/history、memory、trace 等子系统应复用同一时间来源，而不是各自直接取系统时间
 
 ### workspace_path 注入边界
 
@@ -338,7 +339,6 @@ provider 不负责：
 
 ### 子组件容错规则
 
-- bootstrap 文件缺失：跳过
 - skill 解析失败：标记不可用或跳过
 - session 文件读取失败：返回 `None` 或走创建新 session 路径，详细规则见 `011-session-history-core`
 
@@ -364,11 +364,9 @@ provider 不负责：
 - `session_id` 由 runtime 自动生成
 - `ContextBuilder.build_system_prompt()` 顺序稳定：
   - identity + runtime rules
-  - bootstrap files
   - memory
   - always skills
   - skills summary
-- bootstrap 四件套缺失时不会报错
 - `build_messages()` 顺序稳定：
   - system
   - history

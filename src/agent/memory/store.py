@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
 from pathlib import Path
 
 from agent.session.models import SessionMessage
+from agent.time_utils import now_local
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class MemoryStore:
     def raw_archive(self, messages: list[SessionMessage]) -> None:
         """Fallback by dumping raw messages into HISTORY.md."""
 
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        timestamp = now_local().strftime("%Y-%m-%d %H:%M")
         self.append_history(
             f"[{timestamp}] [RAW] {len(messages)} messages\n{self.format_messages(messages)}"
         )

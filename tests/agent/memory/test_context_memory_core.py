@@ -17,6 +17,14 @@ from agent.session.models import Session, SessionMessage
 from agent.skills.loader import SkillsLoader
 
 
+class StubTraceSink:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, str, dict[str, object]]] = []
+
+    def record(self, *, category: str, event: str, data: dict[str, object]) -> None:
+        self.events.append((category, event, data))
+
+
 class StubMemoryAgent:
     def __init__(self, *, result: MemoryConsolidationResult | dict[str, object] | None) -> None:
         self.result = result
@@ -327,3 +335,31 @@ def test_runtime_default_memory_consolidator_archives_and_advances_cursor(
     store = MemoryStore(session.workspace_path)
     assert store.read_long_term() == "# facts"
     assert "summarized chunk" in store.history_file.read_text(encoding="utf-8")
+
+
+def test_memory_consolidator_emits_trace_events(tmp_path: Path) -> None:
+    session = make_session(tmp_path)
+    session.add_message(SessionMessage(role="user", content="a" * 4000))
+    session.add_message(SessionMessage(role="assistant", content="b" * 4000))
+    session.add_message(SessionMessage(role="user", content="c" * 4000))
+    trace = StubTraceSink()
+    consolidator = MemoryConsolidator(
+        store=MemoryStore(session.workspace_path),
+        agent=StubMemoryAgent(
+            result=MemoryConsolidationResult(
+                history_entry="[2026-03-28 12:00] summary",
+                memory_update="# facts",
+            )
+        ),
+        context_window_tokens=4_500,
+        max_completion_tokens=500,
+        trace_sink=trace,
+    )
+
+    changed = consolidator.run_pre_check(session)
+
+    assert changed is True
+    events = {(category, event) for category, event, _ in trace.events}
+    assert ("memory", "pre_check") in events
+    assert ("memory", "check") in events
+    assert ("memory", "consolidation_success") in events

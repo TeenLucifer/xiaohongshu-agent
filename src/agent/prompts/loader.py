@@ -11,7 +11,6 @@ from agent.errors import PromptConfigError
 
 
 class PromptSectionTitles(BaseModel):
-    bootstrap_files: str
     memory: str
     always_skills: str
     skills_summary: str

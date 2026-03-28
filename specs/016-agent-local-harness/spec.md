@@ -11,6 +11,7 @@
 - 支持复用已有 `session_id` 运行
 - 支持在无 `session_id` 时基于 `topic` 创建 session 再运行
 - 输出最终结果、工具调用摘要和关键产物路径
+- 提供端到端联调 trace 日志能力
 
 ## 非目标
 
@@ -53,6 +54,8 @@
 - 默认输出为人类可读格式
 - 支持 `--json` 输出结构化结果
 - 支持 `--verbose` 输出更多 tool 摘要与调试信息
+- 支持 `--trace` 作为摘要 trace 开关
+- 支持 `--trace-full` 作为完整 trace 开关
 - CLI 退出码固定为：
   - `0` 成功
   - `1` 输入错误
@@ -62,11 +65,53 @@
 - local harness 不假设可访问 `/`、`/workspace` 或项目根目录
 - local harness 默认 smoke 语义是 session 目录自检，而不是仓库级 smoke test
 - 当 `user_input` 表述为 `smoke run` / `smoke test` 时，harness 应在送入 runtime 前将任务规范化为明确的 session 自检说明
+- `smoke run` / `smoke test` 的具体任务规范化只发生在 harness 层，不属于 system prompt 的固定规则
 - 默认联调应围绕：
   - 确认当前工作目录
   - 查看 session 目录
   - 必要时创建一个最小测试文件
   - 再读取并汇报结果
+- 当启用 `--trace` 时，harness 必须在当前 `session workspace` 下自动创建：
+  - `logs/agent-trace.log`
+- trace 文件按 session 聚合：
+  - 一个 session 一个固定日志文件
+  - 每次 run 追加一个新的 trace block
+- trace block 采用人类可读文本格式，并以明确的：
+  - `===== RUN START =====`
+  - `===== RUN END =====`
+  分隔
+- `--trace` 的详细信息写入文件，终端只输出：
+  - 最终结果
+  - trace 文件路径
+- `--trace` 摘要模式至少记录：
+  - `session_id`
+  - `topic`
+  - run 开始/结束时间
+  - 原始 `user_input`
+  - 规范化后的 `user_input`
+  - `workspace_path`
+  - prompt 关键 section 摘要
+  - memory 检查摘要
+  - loop 摘要
+  - tool 调用摘要
+  - `final_text`
+  - `artifacts`
+- `--trace-full` 在摘要模式基础上额外记录：
+  - 每轮完整 `system_prompt`
+  - 每轮发给模型的 `messages`
+  - 每轮完整 `tool_definitions`
+  - 每轮模型返回的 `content`
+  - 每轮模型返回的 `tool_calls`
+- trace 数据不由 harness 外层猜测拼装，而由 runtime/loop/memory 通过内部 trace sink 提供关键事件
+- trace 写盘前应做最小脱敏，至少覆盖明显敏感字段名：
+  - `api_key`
+  - `authorization`
+  - `cookie`
+  - `token`
+- trace 首版不要求记录：
+  - provider 原始响应对象
+  - 完整工具原始输出
+  - 未脱敏的敏感信息
 
 ## 验收标准
 
@@ -78,5 +123,8 @@
 - 能验证可用 skills 已进入当前运行上下文
 - 能验证同一 `session_id` 下历史会被复用
 - `--json` 与 `--verbose` 行为清晰稳定
+- `--trace` 能稳定输出单次 run 的关键中间变量摘要
+- `--trace-full` 能稳定输出每轮完整 prompt/messages/tool definitions 与模型输出结果
 - 默认 smoke 场景不会把项目根目录探测当作预期行为
 - `smoke run` / `smoke test` 输入会被规范化成明确的 session 自检任务
+- trace 文件会按 session 追加写入并可解释本次 run 的执行路径

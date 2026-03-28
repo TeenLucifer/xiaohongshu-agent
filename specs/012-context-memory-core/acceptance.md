@@ -42,7 +42,15 @@
    - `HISTORY.md` 增加新 entry
    - `MEMORY.md` 被更新
    - `last_consolidated` 前移
-24. 确认首版方案不依赖向量库或外部检索系统
+24. 在启用 trace 的本地联调场景下查看本次 run 的日志
+25. 确认 trace 中能看到：
+   - pre-check / post-check
+   - token 估算值
+   - `budget`
+   - `target`
+   - 是否发生 consolidation
+   - `last_consolidated` 变化
+26. 确认首版方案不依赖向量库或外部检索系统
 
 ## 自动化验收
 
@@ -57,6 +65,7 @@
 - runtime 默认注入 consolidator 测试通过
 - consolidation 成功后的文件更新与游标推进测试通过
 - consolidation 失败不推进游标测试通过
+- memory trace 事件测试通过
 
 ## 已知限制
 

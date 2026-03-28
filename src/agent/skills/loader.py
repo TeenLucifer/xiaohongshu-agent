@@ -9,10 +9,14 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import yaml
 from pydantic import BaseModel, Field
 
 BUILTIN_SKILLS_DIR = Path(__file__).resolve().parents[3] / "skills"
 FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
+SKILL_ENTRYPOINT = "SKILL.md"
+NESTED_SKILLS_DIR = "skills"
+SKIPPED_DIR_NAMES = {".git", "node_modules", "__pycache__"}
 
 
 class SkillRecord(BaseModel):
@@ -22,7 +26,7 @@ class SkillRecord(BaseModel):
     path: Path
     source: str
     description: str
-    metadata: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     nanobot_metadata: dict[str, Any] = Field(default_factory=dict)
     available: bool = True
     missing_requirements: str = ""
@@ -114,43 +118,68 @@ class SkillsLoader:
         ):
             if root is None or not root.exists():
                 continue
-            for skill_dir in sorted(root.iterdir()):
-                if not skill_dir.is_dir():
-                    continue
-                skill_path = skill_dir / "SKILL.md"
-                if not skill_path.exists() or skill_dir.name in discovered:
-                    continue
-                metadata = self._parse_frontmatter(skill_path.read_text(encoding="utf-8"))
-                nanobot_metadata = self._parse_nanobot_metadata(metadata.get("metadata", ""))
-                missing = self._get_missing_requirements(nanobot_metadata)
-                discovered[skill_dir.name] = SkillRecord(
+            self._discover_from_container(root=root, source=source, discovered=discovered)
+        return list(discovered.values())
+
+    def _discover_from_container(
+        self,
+        *,
+        root: Path,
+        source: str,
+        discovered: dict[str, SkillRecord],
+    ) -> None:
+        for skill_dir in sorted(root.iterdir()):
+            if not skill_dir.is_dir() or self._should_skip_dir(skill_dir):
+                continue
+
+            skill_path = skill_dir / SKILL_ENTRYPOINT
+            if skill_path.exists() and skill_dir.name not in discovered:
+                discovered[skill_dir.name] = self._build_skill_record(
                     name=skill_dir.name,
                     path=skill_path,
                     source=source,
-                    description=metadata.get("description", skill_dir.name),
-                    metadata=metadata,
-                    nanobot_metadata=nanobot_metadata,
-                    available=missing == "",
-                    missing_requirements=missing,
                 )
-        return list(discovered.values())
+
+            nested_container = skill_dir / NESTED_SKILLS_DIR
+            if nested_container.exists() and nested_container.is_dir():
+                self._discover_from_container(
+                    root=nested_container,
+                    source=source,
+                    discovered=discovered,
+                )
+
+    def _build_skill_record(self, *, name: str, path: Path, source: str) -> SkillRecord:
+        metadata = self._parse_frontmatter(path.read_text(encoding="utf-8"))
+        nanobot_metadata = self._parse_nanobot_metadata(metadata.get("metadata", ""))
+        missing = self._get_missing_requirements(nanobot_metadata)
+        return SkillRecord(
+            name=name,
+            path=path,
+            source=source,
+            description=metadata.get("description", name),
+            metadata=metadata,
+            nanobot_metadata=nanobot_metadata,
+            available=missing == "",
+            missing_requirements=missing,
+        )
+
+    def _should_skip_dir(self, path: Path) -> bool:
+        return path.name.startswith(".") or path.name in SKIPPED_DIR_NAMES
 
     def _workspace_skills_dir(self, workspace_path: Path | None) -> Path | None:
         if workspace_path is None:
             return None
         return workspace_path / "skills"
 
-    def _parse_frontmatter(self, content: str) -> dict[str, str]:
+    def _parse_frontmatter(self, content: str) -> dict[str, Any]:
         match = FRONTMATTER_RE.match(content)
         if match is None:
             return {}
-        metadata: dict[str, str] = {}
-        for line in match.group(1).splitlines():
-            if ":" not in line:
-                continue
-            key, value = line.split(":", 1)
-            metadata[key.strip()] = value.strip().strip("\"'")
-        return metadata
+        try:
+            parsed = yaml.safe_load(match.group(1))
+        except yaml.YAMLError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     def _strip_frontmatter(self, content: str) -> str:
         match = FRONTMATTER_RE.match(content)
@@ -158,15 +187,24 @@ class SkillsLoader:
             return content.strip()
         return content[match.end() :].strip()
 
-    def _parse_nanobot_metadata(self, raw: str) -> dict[str, Any]:
-        try:
-            data = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            return {}
-        if not isinstance(data, dict):
-            return {}
+    def _parse_nanobot_metadata(self, raw: Any) -> dict[str, Any]:
+        data = self._parse_metadata_value(raw)
         extracted = data.get("nanobot", data.get("openclaw", {}))
         return extracted if isinstance(extracted, dict) else {}
+
+    def _parse_metadata_value(self, raw: Any) -> dict[str, Any]:
+        if isinstance(raw, dict):
+            return raw
+        if not isinstance(raw, str):
+            return {}
+        for parser in (yaml.safe_load, json.loads):
+            try:
+                parsed = parser(raw)
+            except (TypeError, ValueError, yaml.YAMLError):
+                continue
+            if isinstance(parsed, dict):
+                return parsed
+        return {}
 
     def _get_missing_requirements(self, skill_meta: dict[str, Any]) -> str:
         missing: list[str] = []

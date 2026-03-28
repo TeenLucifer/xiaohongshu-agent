@@ -30,6 +30,12 @@ def test_session_defaults_include_uuid_style_id_and_zero_consolidation(tmp_path:
     assert session.workspace_path == tmp_path / "sessions" / session.session_id
     assert session.workspace_path.exists()
     assert session.workspace_path.is_dir()
+    created_offset = session.created_at.utcoffset()
+    updated_offset = session.updated_at.utcoffset()
+    assert created_offset is not None
+    assert created_offset.total_seconds() == 8 * 3600
+    assert updated_offset is not None
+    assert updated_offset.total_seconds() == 8 * 3600
     snapshot = session.snapshot()
     assert snapshot.session_id == session.session_id
     assert snapshot.topic == "通勤穿搭"

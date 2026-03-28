@@ -8,6 +8,7 @@
 
 - 扫描 builtin skills 和 workspace skills
 - 识别 `skills/<skill-name>/SKILL.md`
+- 支持父 skill 与子 skills 同时发现
 - 解析 `SKILL.md` frontmatter
 - 生成 skills summary
 - 支持 `always skills`
@@ -39,11 +40,10 @@
 - skill 协议直接兼容 nanobot
 - skill 主入口固定为 `SKILL.md`
 - 元数据来自 `SKILL.md` frontmatter
-- frontmatter 解析策略贴 `nanobot`：
-  - 采用轻量 key/value 解析
-  - `metadata` 字段如果是 JSON，则继续解析 `nanobot` 子字段
+- frontmatter 解析参考 `openclaw` 的实现思路：
+  - 正确支持 YAML frontmatter 与多行字段
+  - `metadata` 字段如果是 JSON / JSON5，则继续解析 `nanobot` / `openclaw` 子字段
   - 不引入新的 `manifest.json`
-  - 不在 `015` 中升级为更重的 YAML 语义解析
 - 需要支持 requirement 检查：
   - `bins`
   - `env`
@@ -52,6 +52,19 @@
   - 先扫描 `workspace skills`
   - 再扫描 `builtin skills`
   - 同名 skill 时 `workspace` 覆盖 `builtin`
+- 扫描方式采用“容器递归”：
+  - 根目录继续识别 `skills/<skill-name>/SKILL.md`
+  - 对每个已发现的 skill 目录，只沿其子目录中的 `skills/` 容器继续递归发现
+  - 不做 openclaw 式全量目录递归
+- 父 skill 与子 skills 需要同时暴露到 skills 列表和 summary 中
+- 递归扫描时需要跳过噪音目录：
+  - `.git`
+  - `node_modules`
+  - `__pycache__`
+  - 隐藏目录
+- 同源内的同名 skill 冲突处理保持简单：
+  - 按稳定遍历顺序先到先得
+  - 不新增路径命名空间
 - `list_skills(filter_unavailable=True)` 默认过滤掉依赖不满足的 skill
 - `build_skills_summary()` 必须列出全部 skills，包括不可用 skill，并标记可用性与缺失依赖
 - `skills summary` 格式贴 `nanobot`，使用 XML-like 结构：
@@ -61,6 +74,9 @@
   - `<description>`
   - `<location>`
   - 可选 `<requires>`
+- 注入 skills summary 时必须明确告诉模型：
+  - skills summary 只提供概览
+  - 如需使用某个 skill，应先读取对应 `SKILL.md`
 - 需要支持 `get_always_skills()`
   - 只返回依赖满足且被标记为 `always=true` 的 skill
 - `ContextBuilder` 需要在 memory 之后、skills summary 之前注入 `always skills`
@@ -79,8 +95,12 @@
 
 - 能按 nanobot 的优先级扫描 builtin 与 workspace skills
 - 同名 skill 时 workspace 版本覆盖 builtin 版本
+- 能在根目录 skill 之外，继续发现 `skills/` 容器中的子 skills
+- 父 skill 与子 skills 会同时出现在 skills 列表和 summary 中
+- 不会误扫 `scripts/`、`assets/` 或其他非 `skills/` 容器目录
 - 能区分可用与不可用 skills
 - 能生成 XML-like 的 skills summary
+- skills summary 中的 `description` 能正确反映 `SKILL.md` 的真实描述，而不是 YAML 占位符
 - skills summary 中会保留不可用 skill，并附缺失依赖信息
 - 能识别并返回 `always skills`
 - 能加载指定 skill 的完整内容

@@ -86,8 +86,6 @@ def test_create_session_generates_session_id_and_workspace_path(tmp_path: Path) 
 
 
 def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> None:
-    (tmp_path / "AGENTS.md").write_text("agent rules", encoding="utf-8")
-    (tmp_path / "USER.md").write_text("user rules", encoding="utf-8")
     builder = ContextBuilder(project_root=tmp_path)
 
     prompt = builder.build_system_prompt(
@@ -97,16 +95,17 @@ def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> 
     )
 
     identity_idx = prompt.index("# Identity")
-    bootstrap_idx = prompt.index("# Bootstrap Files")
     memory_idx = prompt.index("# Memory")
     always_skills_idx = prompt.index("# Always Skills")
     skills_summary_idx = prompt.index("# Skills Summary")
 
-    assert identity_idx < bootstrap_idx < memory_idx < always_skills_idx < skills_summary_idx
-    assert "SOUL.md" not in prompt
-    assert "TOOLS.md" not in prompt
+    assert identity_idx < memory_idx < always_skills_idx < skills_summary_idx
+    assert "# Bootstrap Files" not in prompt
+    assert "AGENTS.md" not in prompt
     assert "你只能在当前 session workspace 内工作。" in prompt
     assert "查看目录时优先使用 list_dir" in prompt
+    assert "smoke run" not in prompt
+    assert "如果你要使用某个 skill，请先读取对应的 SKILL.md" in prompt
 
 
 def test_context_builder_builds_messages_with_session_history_and_runtime_context(
@@ -130,6 +129,8 @@ def test_context_builder_builds_messages_with_session_history_and_runtime_contex
     assert messages[0].content == "system prompt"
     assert messages[1].content == "history message"
     assert "Current Time:" in messages[2].content
+    assert "Asia/Shanghai" in messages[2].content
+    assert "+0800" in messages[2].content
     assert "Session ID: sess-1" in messages[2].content
     assert f"Workspace Path: {tmp_path / 'data' / 'sessions' / 'sess-1'}" in messages[2].content
     assert "- /tmp/a.png" in messages[2].content

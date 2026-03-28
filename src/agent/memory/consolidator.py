@@ -14,6 +14,7 @@ from agent.models import PromptMessage
 from agent.prompts import RuntimePromptLoader
 from agent.session.models import Session, SessionMessage
 from agent.tools.base import ToolDefinition
+from agent.trace import TraceSink
 
 if TYPE_CHECKING:
     from agent.loop_runner import LoopModelResponse
@@ -135,10 +136,12 @@ class RuntimeMemoryConsolidator:
         agent: MemoryConsolidationAgent,
         context_window_tokens: int,
         max_completion_tokens: int = 4096,
+        trace_sink: TraceSink | None = None,
     ) -> None:
         self.agent = agent
         self.context_window_tokens = context_window_tokens
         self.max_completion_tokens = max_completion_tokens
+        self.trace_sink = trace_sink
         self._stores: dict[str, MemoryStore] = {}
 
     def run_pre_check(self, session: Session) -> bool:
@@ -158,6 +161,7 @@ class RuntimeMemoryConsolidator:
             agent=self.agent,
             context_window_tokens=self.context_window_tokens,
             max_completion_tokens=self.max_completion_tokens,
+            trace_sink=self.trace_sink,
         )
 
 
@@ -186,11 +190,13 @@ class MemoryConsolidator:
         agent: MemoryConsolidationAgent,
         context_window_tokens: int,
         max_completion_tokens: int = 4096,
+        trace_sink: TraceSink | None = None,
     ) -> None:
         self.store = store
         self.agent = agent
         self.context_window_tokens = context_window_tokens
         self.max_completion_tokens = max_completion_tokens
+        self.trace_sink = trace_sink
 
     @property
     def budget(self) -> int:
@@ -233,7 +239,24 @@ class MemoryConsolidator:
             return False
 
         estimated = estimate_session_tokens(session)
+        self._record_trace(
+            event="check",
+            data={
+                "estimated_tokens": estimated,
+                "budget": self.budget,
+                "target": self.target,
+                "last_consolidated": session.last_consolidated,
+            },
+        )
         if estimated < self.budget:
+            self._record_trace(
+                event="skip",
+                data={
+                    "reason": "under_budget",
+                    "estimated_tokens": estimated,
+                    "budget": self.budget,
+                },
+            )
             return False
 
         changed = False
@@ -246,11 +269,26 @@ class MemoryConsolidator:
                 tokens_to_remove=max(1, estimated - self.target),
             )
             if boundary is None:
+                self._record_trace(
+                    event="skip",
+                    data={
+                        "reason": "no_boundary",
+                        "estimated_tokens": estimated,
+                        "target": self.target,
+                    },
+                )
                 return changed
 
             end_index = boundary[0]
             chunk = session.messages[session.last_consolidated : end_index]
             if not chunk:
+                self._record_trace(
+                    event="skip",
+                    data={
+                        "reason": "empty_chunk",
+                        "boundary": end_index,
+                    },
+                )
                 return changed
 
             if not self._consolidate_chunk(session=session, chunk=chunk, end_index=end_index):
@@ -263,6 +301,12 @@ class MemoryConsolidator:
     def run_pre_check(self, session: Session) -> bool:
         """Run the pre-run consolidation check."""
 
+        self._record_trace(
+            event="pre_check",
+            data={
+                "session_id": session.session_id,
+            },
+        )
         return self.maybe_consolidate_by_tokens(session)
 
     def schedule_post_check(
@@ -273,6 +317,12 @@ class MemoryConsolidator:
         """Run a post-run consolidation check in a background thread."""
 
         def runner() -> None:
+            self._record_trace(
+                event="post_check",
+                data={
+                    "session_id": session.session_id,
+                },
+            )
             changed = self.maybe_consolidate_by_tokens(session)
             if on_complete is not None:
                 on_complete(changed)
@@ -296,6 +346,7 @@ class MemoryConsolidator:
 
         messages_text = self.store.format_messages(chunk)
         current_memory = self.store.read_long_term()
+        previous_cursor = session.last_consolidated
         try:
             raw_result = self.agent.consolidate(
                 current_memory=current_memory,
@@ -304,6 +355,15 @@ class MemoryConsolidator:
             if raw_result is None:
                 logger.warning("Memory consolidation returned no result")
                 self.store.mark_failure_or_raw_archive(chunk)
+                self._record_trace(
+                    event="consolidation_failed",
+                    data={
+                        "reason": "no_result",
+                        "chunk_messages": len(chunk),
+                        "cursor_before": previous_cursor,
+                        "cursor_after": session.last_consolidated,
+                    },
+                )
                 return False
 
             result = (
@@ -314,10 +374,28 @@ class MemoryConsolidator:
         except (ValidationError, ValueError) as exc:
             logger.warning("Memory consolidation returned invalid payload: %s", exc)
             self.store.mark_failure_or_raw_archive(chunk)
+            self._record_trace(
+                event="consolidation_failed",
+                data={
+                    "reason": "invalid_payload",
+                    "chunk_messages": len(chunk),
+                    "cursor_before": previous_cursor,
+                    "cursor_after": session.last_consolidated,
+                },
+            )
             return False
         except Exception as exc:  # noqa: BLE001
             logger.warning("Memory consolidation failed: %s", exc)
             self.store.mark_failure_or_raw_archive(chunk)
+            self._record_trace(
+                event="consolidation_failed",
+                data={
+                    "reason": exc.__class__.__name__,
+                    "chunk_messages": len(chunk),
+                    "cursor_before": previous_cursor,
+                    "cursor_after": session.last_consolidated,
+                },
+            )
             return False
 
         entry = self.store.normalize_text(result.history_entry).strip()
@@ -325,6 +403,15 @@ class MemoryConsolidator:
         if not entry:
             logger.warning("Memory consolidation returned empty history entry")
             self.store.mark_failure_or_raw_archive(chunk)
+            self._record_trace(
+                event="consolidation_failed",
+                data={
+                    "reason": "empty_history_entry",
+                    "chunk_messages": len(chunk),
+                    "cursor_before": previous_cursor,
+                    "cursor_after": session.last_consolidated,
+                },
+            )
             return False
 
         self.store.append_history(entry)
@@ -332,4 +419,18 @@ class MemoryConsolidator:
             self.store.write_long_term(update)
         self.store.mark_success()
         session.mark_consolidated(end_index)
+        self._record_trace(
+            event="consolidation_success",
+            data={
+                "chunk_messages": len(chunk),
+                "cursor_before": previous_cursor,
+                "cursor_after": session.last_consolidated,
+                "history_entry": entry,
+            },
+        )
         return True
+
+    def _record_trace(self, *, event: str, data: dict[str, object]) -> None:
+        if self.trace_sink is None:
+            return
+        self.trace_sink.record(category="memory", event=event, data=dict(data))

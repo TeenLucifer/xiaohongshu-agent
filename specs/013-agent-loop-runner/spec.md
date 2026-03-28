@@ -52,6 +52,8 @@
 - tool 普通失败应转成 tool result 回灌，而不是直接打断 loop
 - 不增加整次 run 的总 timeout
 - 不单独设计 run 状态模型
+- loop 应支持向 harness 暴露内部 trace 事件，用于联调日志
+- trace 事件应暴露完整逐轮输入输出，但不暴露 provider 原始对象或思维链
 
 ## Loop 责任边界
 
@@ -65,6 +67,7 @@
 6. 直到无 tool call 或达到最大轮数
 7. 保存 session
 8. 触发后台 memory consolidation 检查
+9. 在关键节点向可选 trace sink 上报事件
 
 `013` 不负责：
 
@@ -72,6 +75,7 @@
 - memory 预算与文件格式
 - tools 具体实现
 - skills 扫描与安装细节
+- trace 文件落盘格式与 CLI 输出策略
 
 ## Tool 调用规则
 
@@ -80,6 +84,21 @@
 - 即使某个 tool 抛出异常，也不直接中断整轮 loop
 - tool 异常需要转成字符串结果回灌，格式固定为：
   - `Error: <ExceptionType>: <message>`
+- 当启用 trace 时，loop 至少应上报：
+  - run 开始/结束
+  - 每轮发给模型的 `iteration_input`
+  - 每轮模型返回的 `iteration_output`
+  - 当前迭代轮次
+  - 每轮是否有 tool calls
+  - 每个 tool call 的摘要结果
+  - 是正常结束还是触达最大轮数
+- `iteration_input` 至少包含：
+  - 完整 `system_prompt`
+  - 完整 `messages`
+  - 完整 `tool_definitions`
+- `iteration_output` 至少包含：
+  - 完整 `content`
+  - 完整 `tool_calls`
 
 ## 最大轮数兜底
 
@@ -116,3 +135,4 @@
 - 同一轮多个 tool calls 能并发执行并按原顺序回灌
 - `RunResult.tool_calls` 采用轻量摘要结构
 - agent 能基于 skills summary 自主选择 skill
+- loop 的关键事件可被 harness 用于生成联调 trace

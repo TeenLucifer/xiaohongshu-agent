@@ -1,46 +1,20 @@
 # 011 Session History Core Tasks
 
-## 当前任务分组
+## 当前状态
 
-- [x] `011-A`：定义 `Session` 与 `SessionSnapshot`
-  固定字段、`uuid4` 生成规则、`last_consolidated`、消息类型和默认目录规则。
-- [x] `011-B`：定义 `SessionManager`
-  固定 create/load/save/invalidate/list/snapshot 的职责边界和轻量快照返回规则。
-- [x] `011-C`：定义消息追加与读取规则
-  固定 `add_message(...)`、`get_history(...)`、`clear()`、`reset_session(...)` 和游标规则。
-- [x] `011-D`：定义历史合法边界处理
-  处理孤立 tool 结果、超长 tool 消息、持久化字段保留和 runtime context 持久化剥离。
-- [x] `011-E`：定义 session 持久化与容错
-  固定 `jsonl` 结构、`last_consolidated` 持久化、save 重写策略、加载失败路径和容错行为。
+- [x] `011-session-history-core` 已完成，当前处于维护与联调阶段。
 
-## 测试与验收
+## 已完成里程碑
 
-- [x] `Session` 结构测试
-- [x] `SessionSnapshot` 结构测试
-- [x] `session_id = uuid4` 测试
-- [x] `last_consolidated` 默认值测试
-- [x] `SessionManager` 职责边界测试
-- [x] 消息追加测试
-- [x] `get_history(...)` 按游标返回合法切片测试
-- [x] tool 消息截断测试
-- [x] `jsonl` 结构测试
-- [x] `last_consolidated` 持久化读写测试
-- [x] `save` 重写策略测试
-- [x] `reset_session(...)` 行为测试
-- [x] consolidation 失败时游标不前移测试
-- [x] session 加载失败容错测试
-- [x] session 创建即落盘 workspace 目录测试
-- [x] session 加载成功时 workspace 缺失补建测试
+- [x] 建立 `Session`、`SessionSnapshot`、`SessionManager`，固定 session 作为 runtime 工作单元。
+- [x] 完成短期历史追加、读取、清空与 `last_consolidated` 游标规则。
+- [x] 完成 `jsonl` 持久化、容错加载与 workspace 目录存在性保证。
+- [x] 固定 tool 消息合法边界、超长 tool 结果处理与 runtime context 持久化剥离规则。
 
-## 实现收口
+## 当前待办
 
-- [x] session/history 子系统边界已落地
-- [x] `acceptance.md` 已与实现同步
-
-## 依赖
-
-- 依赖 `010-agent-runtime-foundation` 已完成
+- [ ] 当前无进行中的 `011` 子任务；后续如有 session/history 边界调整，再在此补充。
 
 ## 备注
 
-- 当前 feature 只处理短期记忆与历史存取，不处理长期记忆。
+- 详细验收与测试要求以下列文档为准：`acceptance.md`

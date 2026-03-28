@@ -107,11 +107,21 @@
 - consolidator 必须被默认接入 runtime / loop
 - run 前必须执行一次 pre-check
 - run 后必须调度一次 post-check
+- consolidator 必须支持向可选 trace sink 上报联调摘要事件
 - consolidation 成功后必须：
   - 追加写入 `HISTORY.md`
   - 更新 `MEMORY.md`
   - 推进 `last_consolidated`
 - consolidation 失败时不得错误推进 `last_consolidated`
+- trace 首版至少应覆盖：
+  - pre-check / post-check 是否执行
+  - token 估算值
+  - `budget`
+  - `target`
+  - 是否触发 consolidation
+  - 选中的消息数量
+  - consolidation 成功/失败
+  - `last_consolidated` 前后变化
 
 ## 调度策略
 
@@ -142,3 +152,4 @@ system prompt 中的顺序固定为：
 - 不需要引入向量库也能完成首版治理
 - memory rules 已作为 `# Memory` section 的固定组成部分
 - consolidator 已被定义为 runtime 默认接入能力，而不只是预留协议
+- memory 的关键调度与 consolidation 结果可被 harness trace 稳定观测

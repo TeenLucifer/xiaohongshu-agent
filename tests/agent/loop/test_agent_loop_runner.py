@@ -17,6 +17,14 @@ from agent.skills.loader import SkillsLoader
 from agent.tools.registry import ToolDefinition, ToolsRegistry
 
 
+class StubTraceSink:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, str, dict[str, object]]] = []
+
+    def record(self, *, category: str, event: str, data: dict[str, object]) -> None:
+        self.events.append((category, event, data))
+
+
 class StubModelClient:
     def __init__(self, responses: list[LoopModelResponse | Exception]) -> None:
         self._responses = responses
@@ -300,3 +308,56 @@ def test_loop_exposes_skill_summary_to_model(tmp_path: Path) -> None:
     )
 
     assert "<skills><skill>demo</skill></skills>" in model.calls[0][0].content
+
+
+def test_loop_emits_trace_events(tmp_path: Path) -> None:
+    session = make_session(tmp_path)
+    tools = StubToolsRegistry()
+    tools.handlers["alpha"] = lambda arguments: f"alpha:{arguments['value']}"
+    trace = StubTraceSink()
+    model = StubModelClient(
+        [
+            LoopModelResponse(
+                content="先调工具",
+                tool_calls=[ToolCallPayload(id="call-1", name="alpha", arguments={"value": 1})],
+            ),
+            LoopModelResponse(content="done"),
+        ]
+    )
+    runner = LoopRunner(model_client=model, trace_sink=trace)
+
+    runner.run(
+        session=session,
+        request=RunRequest(session_id=session.session_id, user_input="执行"),
+        context_builder=ContextBuilder(tmp_path),
+        skills_loader=StubSkillsLoader(summary="<skills><name>demo</name></skills>"),
+        tools_registry=tools,
+        save_session=lambda _: None,
+    )
+
+    events = {(category, event) for category, event, _ in trace.events}
+    assert ("run", "start") in events
+    assert ("prompt", "summary") in events
+    assert ("prompt", "iteration_input") in events
+    assert ("model", "iteration_output") in events
+    assert ("loop", "iteration") in events
+    assert ("tool", "call") in events
+    assert ("loop", "end") in events
+
+    prompt_events = [
+        data
+        for category, event, data in trace.events
+        if (category, event) == ("prompt", "iteration_input")
+    ]
+    model_events = [
+        data
+        for category, event, data in trace.events
+        if (category, event) == ("model", "iteration_output")
+    ]
+    assert prompt_events[0]["iteration"] == 1
+    assert isinstance(prompt_events[0]["system_prompt"], str)
+    assert isinstance(prompt_events[0]["messages"], list)
+    assert isinstance(prompt_events[0]["tool_definitions"], list)
+    assert prompt_events[0]["tool_definitions"][0]["name"] == "alpha"
+    assert "input_schema" in prompt_events[0]["tool_definitions"][0]
+    assert model_events[0]["content"] == "先调工具"
