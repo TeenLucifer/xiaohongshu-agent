@@ -19,12 +19,13 @@
    - memory
    - always skills
    - skills summary
+6.1 检查 `# Memory` section，确认同时包含长期记忆内容和 memory usage rules
 7. 在缺少部分 bootstrap 文件时执行构建，确认不会报错
 8. 检查 `build_messages()` 顺序是否为：
    - system
    - session history
    - current user message
-9. 检查当前 user message 内是否包含 runtime context，且只包含时间和 `session_id`
+9. 检查当前 user message 内是否包含 runtime context，且只包含时间、`session_id` 和 `workspace_path`
 10. 调用 `run(...)`，确认输入不包含显式 skill 指定
 11. 确认 `RunResult` 返回：
    - `session_id`

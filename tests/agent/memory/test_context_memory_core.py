@@ -5,11 +5,13 @@ from typing import cast
 
 from agent.context_builder import ContextBuilder
 from agent.memory.consolidator import (
+    DefaultMemoryConsolidationAgent,
     MemoryConsolidationResult,
     MemoryConsolidator,
+    RuntimeMemoryConsolidator,
 )
 from agent.memory.store import MemoryStore
-from agent.models import RunRequest, RunResult
+from agent.models import PromptMessage, RunRequest, RunResult, ToolCallPayload
 from agent.runtime import AgentRuntime
 from agent.session.models import Session, SessionMessage
 from agent.skills.loader import SkillsLoader
@@ -30,6 +32,32 @@ class StubMemoryAgent:
         return self.result
 
 
+class StubToolCallingModelClient:
+    def __init__(self, tool_calls: list[ToolCallPayload] | None = None) -> None:
+        self.tool_calls = tool_calls or []
+        self.calls: list[tuple[list[str], object | None]] = []
+
+    def complete(
+        self,
+        *,
+        messages: list[object],
+        tool_definitions: list[object],
+        tool_choice: object | None = None,
+    ) -> object:
+        _ = tool_definitions
+        self.calls.append(
+            ([cast(PromptMessage, message).role for message in messages], tool_choice)
+        )
+        return type(
+            "Response",
+            (),
+            {
+                "content": "",
+                "tool_calls": self.tool_calls,
+            },
+        )()
+
+
 def make_session(tmp_path: Path, session_id: str = "sess-1") -> Session:
     return Session(session_id=session_id, workspace_path=tmp_path / "sessions" / session_id)
 
@@ -45,6 +73,32 @@ def test_memory_store_uses_session_memory_directory(tmp_path: Path) -> None:
     assert store.read_long_term() == "# facts"
     assert "summary" in store.history_file.read_text(encoding="utf-8")
     assert store.get_memory_context() == "## Long-term Memory\n# facts"
+
+
+def test_default_memory_consolidation_agent_uses_save_memory_tool() -> None:
+    model_client = StubToolCallingModelClient(
+        tool_calls=[
+            ToolCallPayload(
+                id="call-1",
+                name="save_memory",
+                arguments={
+                    "history_entry": "[2026-03-28 12:00] summary",
+                    "memory_update": "# facts",
+                },
+            )
+        ]
+    )
+    agent = DefaultMemoryConsolidationAgent(model_client=model_client)  # type: ignore[arg-type]
+
+    result = agent.consolidate(
+        current_memory="# current",
+        messages_text="[2026-03-28 12:01] USER: hi",
+    )
+
+    assert isinstance(result, MemoryConsolidationResult)
+    assert result.history_entry == "[2026-03-28 12:00] summary"
+    assert result.memory_update == "# facts"
+    assert model_client.calls[0][1] == {"type": "function", "function": {"name": "save_memory"}}
 
 
 def test_memory_consolidator_exposes_budget_and_target_formulas(tmp_path: Path) -> None:
@@ -212,4 +266,64 @@ def test_runtime_injects_memory_context_into_system_prompt(tmp_path: Path) -> No
     runtime.run(RunRequest(session_id=session.session_id, user_input="test"))
 
     assert "# Memory" in captured["system"]
+    assert "## Memory Usage Rules" in captured["system"]
+    assert "MEMORY.md 记录长期事实" in captured["system"]
     assert "## Long-term Memory\n# persisted memory" in captured["system"]
+
+
+def test_runtime_default_memory_consolidator_archives_and_advances_cursor(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class HybridModelClient:
+        def complete(
+            self,
+            *,
+            messages: list[object],
+            tool_definitions: list[object],
+            tool_choice: object | None = None,
+        ) -> object:
+            tool_names = [getattr(item, "name", None) for item in tool_definitions]
+            if "save_memory" in tool_names:
+                return type(
+                    "Response",
+                    (),
+                    {
+                        "content": "",
+                        "tool_calls": [
+                            ToolCallPayload(
+                                id="save-1",
+                                name="save_memory",
+                                arguments={
+                                    "history_entry": "[2026-03-28 12:00] summarized chunk",
+                                    "memory_update": "# facts",
+                                },
+                            )
+                        ],
+                    },
+                )()
+            return type("Response", (), {"content": "done", "tool_calls": []})()
+
+    monkeypatch.setattr(
+        "agent.runtime.create_default_model_client",
+        lambda config=None: HybridModelClient(),
+    )
+    monkeypatch.setenv("OPENAI_API_KEY", "key")
+    monkeypatch.setenv("OPENAI_MODEL", "model")
+    monkeypatch.setattr(AgentRuntime, "_DEFAULT_CONTEXT_WINDOW_TOKENS", 4_500)
+    monkeypatch.setattr(AgentRuntime, "_DEFAULT_MAX_COMPLETION_TOKENS", 500)
+
+    runtime = AgentRuntime(project_root=tmp_path, data_root=tmp_path / "data")
+    session = runtime.session_manager.create(topic="话题")
+    session.add_message(SessionMessage(role="user", content="a" * 4000))
+    session.add_message(SessionMessage(role="assistant", content="b" * 4000))
+    session.add_message(SessionMessage(role="user", content="c" * 4000))
+
+    result = runtime.run(RunRequest(session_id=session.session_id, user_input="继续"))
+
+    assert result.final_text == "done"
+    assert isinstance(runtime.loop_runner.memory_consolidator, RuntimeMemoryConsolidator)
+    assert session.last_consolidated == 2
+    store = MemoryStore(session.workspace_path)
+    assert store.read_long_term() == "# facts"
+    assert "summarized chunk" in store.history_file.read_text(encoding="utf-8")

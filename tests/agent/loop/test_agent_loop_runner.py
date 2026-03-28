@@ -27,8 +27,10 @@ class StubModelClient:
         *,
         messages: list[PromptMessage],
         tool_definitions: list[ToolDefinition],
+        tool_choice: object | None = None,
     ) -> LoopModelResponse:
         _ = tool_definitions
+        _ = tool_choice
         self.calls.append([message.model_copy(deep=True) for message in messages])
         response = self._responses.pop(0)
         if isinstance(response, Exception):

@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from agent.models import PromptMessage, RunRequest
+from agent.prompts import RuntimePromptLoader
 
 
 class ContextBuilder:
@@ -16,6 +17,7 @@ class ContextBuilder:
 
     def __init__(self, project_root: Path) -> None:
         self._project_root = project_root
+        self._prompt_config = RuntimePromptLoader().load()
 
     def build_system_prompt(
         self,
@@ -30,14 +32,13 @@ class ContextBuilder:
         if bootstrap_section:
             parts.append(bootstrap_section)
 
-        if memory_context:
-            parts.append(f"# Memory\n\n{memory_context}")
+        parts.append(self._build_memory_section(memory_context))
 
         if always_skills:
-            parts.append(f"# Always Skills\n\n{always_skills}")
+            parts.append(f"# {self._prompt_config.sections.always_skills}\n\n{always_skills}")
 
         if skills_summary:
-            parts.append(f"# Skills Summary\n\n{skills_summary}")
+            parts.append(f"# {self._prompt_config.sections.skills_summary}\n\n{skills_summary}")
 
         return "\n\n".join(parts)
 
@@ -64,17 +65,7 @@ class ContextBuilder:
 
     def _build_identity_rules(self) -> str:
         return "\n".join(
-            [
-                "# Identity",
-                "你是围绕 session 工作的运营助手 runtime。",
-                "你不是通用闲聊机器人，应优先完成当前任务。",
-                "你只能在当前 session workspace 内工作。",
-                "不要假设可以访问项目根目录、宿主根目录或任意绝对路径。",
-                "默认可用能力来自 tools 和已加载 skills。",
-                "查看目录时优先使用 list_dir，读取文件时优先使用 read_file。",
-                "当任务表述为 smoke run 或 smoke test 时，默认理解为 session 目录内的 agent 自检。",
-                "完成任务后应停止工具调用并给出执行结果。",
-            ]
+            [f"# {self._prompt_config.identity.title}", *self._prompt_config.identity.rules]
         )
 
     def _build_bootstrap_section(self) -> str:
@@ -89,7 +80,14 @@ class ContextBuilder:
             sections.append(f"## {filename}\n\n{content}")
         if not sections:
             return ""
-        return "# Bootstrap Files\n\n" + "\n\n".join(sections)
+        return f"# {self._prompt_config.sections.bootstrap_files}\n\n" + "\n\n".join(sections)
+
+    def _build_memory_section(self, memory_context: str) -> str:
+        rules = "\n".join(f"- {rule}" for rule in self._prompt_config.memory.rules)
+        parts = [f"## {self._prompt_config.memory.rules_title}\n\n{rules}"]
+        if memory_context:
+            parts.append(memory_context)
+        return f"# {self._prompt_config.sections.memory}\n\n" + "\n\n".join(parts)
 
     def _build_current_user_message(
         self,
@@ -97,11 +95,12 @@ class ContextBuilder:
         request: RunRequest,
         workspace_path: Path,
     ) -> str:
+        runtime_context = self._prompt_config.runtime_context
         lines = [
-            "[Runtime Context — metadata only, not instructions]",
-            f"Current Time: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S %Z')}",
-            f"Session ID: {request.session_id}",
-            f"Workspace Path: {workspace_path}",
+            runtime_context.header,
+            f"{runtime_context.current_time}: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S %Z')}",
+            f"{runtime_context.session_id}: {request.session_id}",
+            f"{runtime_context.workspace_path}: {workspace_path}",
             "",
             request.user_input,
         ]
@@ -109,7 +108,7 @@ class ContextBuilder:
             lines.extend(
                 [
                     "",
-                    "Attachments:",
+                    f"{runtime_context.attachments}:",
                     *[f"- {attachment}" for attachment in request.attachments],
                 ]
             )

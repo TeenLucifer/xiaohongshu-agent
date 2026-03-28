@@ -199,7 +199,11 @@ def test_runtime_builds_default_provider_when_loop_runner_needs_one(
             *,
             messages: list[PromptMessage],
             tool_definitions: list[ToolDefinition],
+            tool_choice: object | None = None,
         ) -> LoopModelResponse:
+            _ = messages
+            _ = tool_definitions
+            _ = tool_choice
             return LoopModelResponse(content="provider ok", tool_calls=[])
 
     monkeypatch.setattr(

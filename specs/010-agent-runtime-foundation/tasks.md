@@ -16,6 +16,8 @@
   将 `Provider / ModelClient` 收编进 runtime foundation，并固定最小 OpenAI-compatible 适配边界。
 - [x] `010-G`：补 provider 默认配置
   固定环境变量默认读取与显式注入覆盖策略。
+- [x] `010-H`：补静态 prompt 配置
+  将 `ContextBuilder` 中的静态提示词文案抽到内部 YAML 配置，同时保留动态拼装逻辑。
 
 ## 测试与验收
 
@@ -33,6 +35,7 @@
 - [x] provider 适配与响应解析测试
 - [x] runtime 默认 provider 构造测试
 - [x] provider 缺配置错误测试
+- [x] 静态 prompt 配置加载测试
 
 ## 实现收口
 
@@ -41,6 +44,7 @@
 - [x] `011` / `012` 依赖边界已正确引用
 - [x] provider 骨架已落地
 - [x] `acceptance.md` 已与 provider 实现同步
+- [x] 静态 prompt YAML 已落地并接入 `ContextBuilder`
 
 ## 依赖
 

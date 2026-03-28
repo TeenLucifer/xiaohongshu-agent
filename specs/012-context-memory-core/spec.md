@@ -62,6 +62,13 @@
 - 每次 consolidation 返回完整更新版 `memory_update`
 - `HISTORY.md` 每次 consolidation 追加一条 `history_entry`
 - `history_entry` 必须以 `[YYYY-MM-DD HH:MM]` 开头
+- `# Memory` section 不仅注入 `MEMORY.md` 内容，也注入固定的 memory usage rules
+- memory usage rules 近似参考 `nanobot/skills/memory/SKILL.md`，至少明确：
+  - `MEMORY.md` 记录长期事实、稳定偏好、持续上下文
+  - `HISTORY.md` 是追加式历史日志，不直接注入 prompt
+  - 搜索历史优先查 `HISTORY.md`
+  - 重要稳定事实应写入 `MEMORY.md`
+  - memory consolidation 由 runtime 内建的 consolidator 负责，而不是由 skill 执行
 
 ### 上下文窗口治理
 
@@ -84,7 +91,7 @@
 - 使用动态消息边界，而不是固定窗口长度
 - 优先在安全边界切分，避免切断 tool 调用链
 - 短期历史来自 `Session.get_history(...)`
-- 长期记忆通过 `MEMORY.md` 注入 system prompt
+- 长期记忆通过 `MEMORY.md` 内容和 memory usage rules 一起注入 system prompt
 
 ## consolidation agent
 
@@ -96,6 +103,15 @@
   - `history_entry`
   - `memory_update`
 - 连续失败后允许 raw archive fallback 写入 `HISTORY.md`
+- `memory consolidation agent` 是 runtime 内建能力，不属于 skills 子系统
+- consolidator 必须被默认接入 runtime / loop
+- run 前必须执行一次 pre-check
+- run 后必须调度一次 post-check
+- consolidation 成功后必须：
+  - 追加写入 `HISTORY.md`
+  - 更新 `MEMORY.md`
+  - 推进 `last_consolidated`
+- consolidation 失败时不得错误推进 `last_consolidated`
 
 ## 调度策略
 
@@ -124,3 +140,5 @@ system prompt 中的顺序固定为：
 - consolidation 协议固定为 `history_entry / memory_update`
 - 预算公式、`target` 和调度策略固定
 - 不需要引入向量库也能完成首版治理
+- memory rules 已作为 `# Memory` section 的固定组成部分
+- consolidator 已被定义为 runtime 默认接入能力，而不只是预留协议

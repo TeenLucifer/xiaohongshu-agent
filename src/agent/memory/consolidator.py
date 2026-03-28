@@ -5,12 +5,18 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import BaseModel, ValidationError, field_validator
 
 from agent.memory.store import MemoryStore
+from agent.models import PromptMessage
+from agent.prompts import RuntimePromptLoader
 from agent.session.models import Session, SessionMessage
+from agent.tools.base import ToolDefinition
+
+if TYPE_CHECKING:
+    from agent.loop_runner import LoopModelResponse
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +47,118 @@ class MemoryConsolidationAgent(Protocol):
         messages_text: str,
     ) -> MemoryConsolidationResult | dict[str, object] | None:
         """Return a structured memory consolidation result."""
+
+
+class MemoryModelClient(Protocol):
+    """Model client used by the memory consolidation agent."""
+
+    def complete(
+        self,
+        *,
+        messages: list[PromptMessage],
+        tool_definitions: list[ToolDefinition],
+        tool_choice: object | None = None,
+    ) -> LoopModelResponse:
+        """Produce one response for consolidation."""
+        ...
+
+
+class DefaultMemoryConsolidationAgent:
+    """Default runtime memory consolidation agent using the shared model client."""
+
+    _SAVE_MEMORY_TOOL = ToolDefinition(
+        name="save_memory",
+        description="Save the memory consolidation result to persistent storage.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "history_entry": {
+                    "type": "string",
+                    "description": (
+                        "A paragraph summarizing key events/decisions/topics. "
+                        "Start with [YYYY-MM-DD HH:MM]."
+                    ),
+                },
+                "memory_update": {
+                    "type": "string",
+                    "description": "Full updated long-term memory as markdown.",
+                },
+            },
+            "required": ["history_entry", "memory_update"],
+        },
+    )
+
+    def __init__(
+        self,
+        *,
+        model_client: MemoryModelClient,
+        prompt_loader: RuntimePromptLoader | None = None,
+    ) -> None:
+        self.model_client = model_client
+        self.prompt_config = (prompt_loader or RuntimePromptLoader()).load()
+
+    def consolidate(
+        self,
+        *,
+        current_memory: str,
+        messages_text: str,
+    ) -> MemoryConsolidationResult | dict[str, object] | None:
+        memory_prompt = self.prompt_config.memory
+        response = self.model_client.complete(
+            messages=[
+                PromptMessage(role="system", content=memory_prompt.consolidation_system),
+                PromptMessage(
+                    role="user",
+                    content=memory_prompt.consolidation_user_template.format(
+                        current_memory=current_memory or "(empty)",
+                        messages_text=messages_text,
+                    ),
+                ),
+            ],
+            tool_definitions=[self._SAVE_MEMORY_TOOL],
+            tool_choice={"type": "function", "function": {"name": "save_memory"}},
+        )
+        if not response.tool_calls:
+            return None
+        tool_call = response.tool_calls[0]
+        if tool_call.name != "save_memory":
+            return None
+        return MemoryConsolidationResult.model_validate(tool_call.arguments)
+
+
+class RuntimeMemoryConsolidator:
+    """Session-aware wrapper that provides one memory hook for the shared loop runner."""
+
+    def __init__(
+        self,
+        *,
+        agent: MemoryConsolidationAgent,
+        context_window_tokens: int,
+        max_completion_tokens: int = 4096,
+    ) -> None:
+        self.agent = agent
+        self.context_window_tokens = context_window_tokens
+        self.max_completion_tokens = max_completion_tokens
+        self._stores: dict[str, MemoryStore] = {}
+
+    def run_pre_check(self, session: Session) -> bool:
+        return self._for_session(session).run_pre_check(session)
+
+    def schedule_post_check(
+        self,
+        session: Session,
+        on_complete: Callable[[bool], None] | None = None,
+    ) -> threading.Thread:
+        return self._for_session(session).schedule_post_check(session, on_complete)
+
+    def _for_session(self, session: Session) -> MemoryConsolidator:
+        store = self._stores.setdefault(session.session_id, MemoryStore(session.workspace_path))
+        return MemoryConsolidator(
+            store=store,
+            agent=self.agent,
+            context_window_tokens=self.context_window_tokens,
+            max_completion_tokens=self.max_completion_tokens,
+        )
 
 
 def estimate_message_tokens(message: SessionMessage) -> int:

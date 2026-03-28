@@ -8,6 +8,7 @@ from typing import Any
 from agent.context_builder import ContextBuilder
 from agent.errors import RuntimeInitializationError
 from agent.loop_runner import LoopModelClient, LoopRunner
+from agent.memory import DefaultMemoryConsolidationAgent, RuntimeMemoryConsolidator
 from agent.models import RunRequest, RunResult
 from agent.provider import ProviderConfig, create_default_model_client
 from agent.session.manager import SessionManager
@@ -18,6 +19,9 @@ from agent.tools.registry import ToolsRegistry
 
 class AgentRuntime:
     """Thin runtime host that coordinates core runtime components."""
+
+    _DEFAULT_CONTEXT_WINDOW_TOKENS = 65_536
+    _DEFAULT_MAX_COMPLETION_TOKENS = 4_096
 
     def __init__(
         self,
@@ -62,6 +66,7 @@ class AgentRuntime:
     def run(self, request: RunRequest) -> RunResult:
         session = self.session_manager.require(request.session_id)
         self._ensure_model_client()
+        self._ensure_memory_consolidator()
         extra_allowed_dirs = [session.workspace_path / "tmp"]
         metadata_extra_dirs = request.metadata.get("extra_allowed_dirs", [])
         if isinstance(metadata_extra_dirs, list):
@@ -97,3 +102,18 @@ class AgentRuntime:
             self.loop_runner.model_client = self.model_client
         except RuntimeInitializationError:
             raise
+
+    def _ensure_memory_consolidator(self) -> None:
+        if not isinstance(self.loop_runner, LoopRunner):
+            return
+        if not hasattr(self.loop_runner, "memory_consolidator"):
+            return
+        if self.loop_runner.memory_consolidator is not None:
+            return
+        if self.model_client is None:
+            return
+        self.loop_runner.memory_consolidator = RuntimeMemoryConsolidator(
+            agent=DefaultMemoryConsolidationAgent(model_client=self.model_client),
+            context_window_tokens=self._DEFAULT_CONTEXT_WINDOW_TOKENS,
+            max_completion_tokens=self._DEFAULT_MAX_COMPLETION_TOKENS,
+        )

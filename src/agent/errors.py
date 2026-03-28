@@ -17,3 +17,7 @@ class SessionNotFoundError(AgentRuntimeError):
 
 class ProviderCallError(AgentRuntimeError):
     """Raised when the model provider fails in a non-recoverable way."""
+
+
+class PromptConfigError(AgentRuntimeError):
+    """Raised when internal prompt configuration is missing or invalid."""

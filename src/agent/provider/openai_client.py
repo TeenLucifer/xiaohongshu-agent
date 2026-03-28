@@ -29,6 +29,7 @@ class OpenAICompatibleModelClient(LoopModelClient):
         *,
         messages: list[PromptMessage],
         tool_definitions: list[ToolDefinition],
+        tool_choice: object | None = None,
     ) -> LoopModelResponse:
         payload = {
             "model": self.config.model,
@@ -36,6 +37,8 @@ class OpenAICompatibleModelClient(LoopModelClient):
         }
         if tool_definitions:
             payload["tools"] = [_serialize_tool_definition(item) for item in tool_definitions]
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
 
         try:
             response = self._client.chat.completions.create(**payload)

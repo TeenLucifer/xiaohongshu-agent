@@ -27,10 +27,22 @@
    - memory
    - always skills
    - skills summary
-16. 确认采用“运行前检查 + 运行后后台补一次”的调度策略
-17. 构造连续 consolidation 失败场景
-18. 确认系统会走 raw archive fallback，并将原始归档写入 `HISTORY.md`
-19. 确认首版方案不依赖向量库或外部检索系统
+16. 确认 `# Memory` section 同时包含长期记忆内容和固定的 memory usage rules
+17. 确认 memory rules 至少说明：
+   - `MEMORY.md` 记录长期事实
+   - `HISTORY.md` 是追加式历史
+   - 搜索历史优先查 `HISTORY.md`
+   - consolidator 由 runtime 内建能力负责
+18. 确认采用“运行前检查 + 运行后后台补一次”的调度策略
+19. 构造连续 consolidation 失败场景
+20. 确认系统会走 raw archive fallback，并将原始归档写入 `HISTORY.md`
+21. 构造一次真实超预算 run
+22. 确认 run 前会尝试 consolidation，run 后会调度 post-check
+23. 确认 consolidation 成功后：
+   - `HISTORY.md` 增加新 entry
+   - `MEMORY.md` 被更新
+   - `last_consolidated` 前移
+24. 确认首版方案不依赖向量库或外部检索系统
 
 ## 自动化验收
 
@@ -41,6 +53,10 @@
 - consolidation agent 协议测试通过
 - raw archive fallback 测试通过
 - 前检查 + 后台补一次 调度测试通过
+- memory rules 注入测试通过
+- runtime 默认注入 consolidator 测试通过
+- consolidation 成功后的文件更新与游标推进测试通过
+- consolidation 失败不推进游标测试通过
 
 ## 已知限制
 

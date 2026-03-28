@@ -117,6 +117,8 @@ memory 规则：
 
 - 长期记忆来自 `012-context-memory-core`
 - 以独立 memory section 注入 system prompt
+- `# Memory` section 同时包含长期记忆内容和固定的 memory usage rules
+- memory usage rules 可来自内部 YAML prompt 配置
 
 always skills 规则：
 
@@ -177,6 +179,17 @@ always skills 规则：
 - 当任务表述为 `smoke run` / `smoke test` 时，默认应理解为 session 目录内的 agent 自检
 - 查看目录优先使用 `list_dir`
 - 读取文件优先使用 `read_file`
+
+### 静态 prompt 配置边界
+
+- `ContextBuilder` 中的静态提示词文案可以由内部 YAML 配置提供
+- 静态提示词配置只承载固定文案，不承载运行时条件逻辑
+- 动态拼装职责仍保留在 `ContextBuilder`：
+  - bootstrap files
+  - memory
+  - always skills
+  - skills summary
+  - runtime context
 
 ### workspace_path 注入边界
 

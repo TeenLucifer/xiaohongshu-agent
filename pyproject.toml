@@ -12,6 +12,7 @@ dependencies = [
   "openai>=1.76,<2.0",
   "pydantic>=2.11,<3.0",
   "pydantic-settings>=2.8,<3.0",
+  "PyYAML>=6.0,<7.0",
 ]
 
 [dependency-groups]
@@ -24,12 +25,16 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/agent", "src/shared"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/agent/prompts/runtime.yaml" = "agent/prompts/runtime.yaml"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+extend-exclude = ["skills/xiaohongshu-skills"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

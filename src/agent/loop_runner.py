@@ -37,6 +37,7 @@ class LoopModelClient(Protocol):
         *,
         messages: list[PromptMessage],
         tool_definitions: list[ToolDefinition],
+        tool_choice: object | None = None,
     ) -> LoopModelResponse:
         """Produce the next assistant turn."""
         ...
