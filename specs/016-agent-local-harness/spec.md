@@ -58,6 +58,15 @@
   - `1` 输入错误
   - `2` 运行失败
 - skill 由 agent 自主选择，不在 harness 输入中显式指定
+- local harness 默认文件系统可见范围是当前 session workspace
+- local harness 不假设可访问 `/`、`/workspace` 或项目根目录
+- local harness 默认 smoke 语义是 session 目录自检，而不是仓库级 smoke test
+- 当 `user_input` 表述为 `smoke run` / `smoke test` 时，harness 应在送入 runtime 前将任务规范化为明确的 session 自检说明
+- 默认联调应围绕：
+  - 确认当前工作目录
+  - 查看 session 目录
+  - 必要时创建一个最小测试文件
+  - 再读取并汇报结果
 
 ## 验收标准
 
@@ -69,3 +78,5 @@
 - 能验证可用 skills 已进入当前运行上下文
 - 能验证同一 `session_id` 下历史会被复用
 - `--json` 与 `--verbose` 行为清晰稳定
+- 默认 smoke 场景不会把项目根目录探测当作预期行为
+- `smoke run` / `smoke test` 输入会被规范化成明确的 session 自检任务

@@ -5,6 +5,11 @@
 .env
 .env.*
 
+.venv/
+.uv-cache/
+__pycache__/
+*.pyc
+
 node_modules/
 dist/
 coverage/
@@ -14,3 +19,5 @@ playwright-report/
 *.log
 *.tsbuildinfo
 功能.md
+
+data/sessions/

@@ -43,6 +43,7 @@
 - `tool` 消息超长时保留截断后的完整结果
 - session 默认工作目录规则保持：
   - `data/sessions/<session_id>/`
+- `workspace_path` 不只是逻辑路径，必须是可供 tools 直接访问的真实目录
 - `SessionSnapshot` 不包含额外统计字段
 
 ## Session 字段
@@ -103,6 +104,9 @@
 
 - `list_sessions` 只返回轻量快照
 - 不在 `list_sessions` 中额外拼统计信息
+- `create(...)` 创建新 session 时，必须确保 `workspace_path` 目录已存在
+- `get_or_create(...)` 走新建路径时，同样必须确保 `workspace_path` 目录已存在
+- `load(...)` 成功恢复 session 时，若 `workspace_path` 缺失，可补建目录
 
 ## 历史消息规则
 
@@ -149,6 +153,7 @@
 - metadata 行必须保存 `last_consolidated`
 - 内存中维护完整 `Session`
 - 每次 `save` 重写整个 session 文件
+- session 创建后，默认工作目录必须已经可直接供 filesystem tools 使用
 - session 文件读取失败时：
   - 记录日志
   - 返回 `None`
@@ -167,5 +172,7 @@
 - `jsonl` 第一行是 metadata，后续每行是一条 message
 - metadata 行包含 `last_consolidated`
 - 每次 `save` 会重写整个 session 文件
+- session 创建后，`workspace_path` 目录已真实存在
+- session 加载成功但目录缺失时，会补建 `workspace_path`
 - `reset_session(...)` 只清空消息并重置游标，不清空核心元数据
 - session 读取失败时能容错继续

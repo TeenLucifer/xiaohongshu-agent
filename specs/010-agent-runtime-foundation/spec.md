@@ -6,18 +6,26 @@
 
 本 feature 参考 `nanobot` 的总体形态，但不照搬其聊天渠道模型。本项目的 runtime 以 `Session` 为真正工作单元，`topic` 只是 session metadata。
 
+首版 provider 采用 OpenAI-compatible 方向，但只覆盖最小可联调能力：
+
+- 非流式 chat completion
+- tool calling
+- 基础环境变量配置
+
 ## 目标
 
 - 建立一个薄的 `AgentRuntime` 宿主层
-- 固定内部 5 个组件边界：
+- 固定内部 6 个组件边界：
   - `SessionManager`
   - `ContextBuilder`
   - `SkillsLoader`
   - `ToolsRegistry`
   - `LoopRunner`
+  - `Provider / ModelClient`
 - 固定 `Session` 数据边界
 - 固定 `ContextBuilder` 的系统提示词与消息组装顺序
 - 固定 runtime 对外最小接口和输入输出模型
+- 固定 provider 的最小适配边界与默认配置来源
 - 固定与 `nanobot` 一致的容错风格和最小错误边界
 
 ## 非目标
@@ -49,19 +57,21 @@
 - `SkillsLoader`
 - `ToolsRegistry`
 - `LoopRunner`
+- `Provider / ModelClient`
 
 `AgentRuntime` 负责：
 
 - 创建和重置 session
 - 基于 `session_id` 运行一次 agent 调用
 - 读取 session 快照
-- 串联 session、context、skills、tools、loop
+- 串联 session、context、skills、tools、provider、loop
 
 `AgentRuntime` 不负责：
 
 - tools 具体实现
 - skills 协议设计
 - loop 内部迭代逻辑
+- provider 之外的上层产品接入策略
 - Session/history 详细协议
 - 长期记忆与上下文窗口治理
 - 浏览器/CDP 能力
@@ -151,11 +161,28 @@ always skills 规则：
 
 - `Current Time`
 - `Session ID`
+- `Workspace Path`
 
 并明确标记为：
 
 - metadata only
 - not instructions
+
+### identity + runtime rules 约束补充
+
+`ContextBuilder` 的系统级规则必须明确：
+
+- agent 只能在当前 `session workspace` 内工作
+- 不要假设可访问项目根目录、宿主根目录或任意绝对路径
+- 当任务表述为 `smoke run` / `smoke test` 时，默认应理解为 session 目录内的 agent 自检
+- 查看目录优先使用 `list_dir`
+- 读取文件优先使用 `read_file`
+
+### workspace_path 注入边界
+
+- `workspace_path` 由 runtime/session 内部提供给 `ContextBuilder`
+- `workspace_path` 不进入 `RunRequest`
+- runtime 负责把当前 session 的 `workspace_path` 注入到本轮 message 构建过程
 
 ### attachments
 
@@ -235,12 +262,57 @@ always skills 规则：
 - 不删除工作目录
 - 不删除业务数据目录
 
+## Provider 骨架边界
+
+### Provider / ModelClient
+
+provider 是 `010` 的 runtime 骨架组件，不单独拆新 feature。
+
+首版范围固定为：
+
+- OpenAI-compatible 接口
+- 非流式 chat completion
+- tool calling
+- 基础配置与环境变量读取
+
+provider 负责：
+
+- 接收 `messages + tool_definitions`
+- 发起一次模型调用
+- 将 provider 原始响应收敛为 `LoopModelResponse`
+
+provider 不负责：
+
+- 流式输出
+- 多模态输入
+- 模型路由与重试策略
+- 供应商特有扩展能力
+
+### Provider 配置
+
+首版默认从环境变量读取：
+
+- `OPENAI_API_KEY`
+- `OPENAI_BASE_URL`（可选）
+- `OPENAI_MODEL`
+
+同时允许在 runtime 初始化时显式注入 provider 或 model client 覆盖默认值。
+
+### Provider 适配约束
+
+- `LoopRunner` 仅依赖 `LoopModelClient` 协议，不直接耦合具体 SDK
+- provider 默认实现必须能解析：
+  - assistant 文本内容
+  - tool calls
+- provider 原始响应对象不得穿透到 `RunResult`
+
 ## 组件协作边界
 
 - `SessionManager` 负责 session 生命周期与存取，详细协议见 `011-session-history-core`
 - `ContextBuilder` 负责 prompt 与 messages 组装
 - `SkillsLoader` 负责 skills 发现、summary 和加载
 - `ToolsRegistry` 负责 tools 注册与定义暴露
+- `Provider / ModelClient` 负责真实模型调用适配
 - `LoopRunner` 负责真正的 tool-calling loop
 
 ## 错误边界
@@ -274,20 +346,24 @@ always skills 规则：
 ## 验收标准
 
 - 可以创建 `AgentRuntime` 实例
-- runtime 内部固定包含 5 个组件边界
+- runtime 内部固定包含 6 个组件边界
 - `create_session(...)` 只接受 `topic` 和 `metadata`
 - `session_id` 由 runtime 自动生成
 - `ContextBuilder.build_system_prompt()` 顺序稳定：
   - identity + runtime rules
   - bootstrap files
+  - memory
+  - always skills
   - skills summary
 - bootstrap 四件套缺失时不会报错
 - `build_messages()` 顺序稳定：
   - system
   - history
   - current user message
-- `runtime context` 只注入时间和 `session_id`
+- `runtime context` 只注入时间、`session_id` 和 `workspace_path`
 - `run(...)` 不接受显式 skill 指定
+- runtime 默认会尝试构造 provider / model client
+- provider 缺失必要配置时会返回清晰错误
 - `RunResult` 返回：
   - `session_id`
   - `final_text`

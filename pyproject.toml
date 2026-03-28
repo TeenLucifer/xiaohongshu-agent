@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "xiaohongshu-agent"
+version = "0.1.0"
+description = "Session-based agent runtime for operations workflows."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "openai>=1.76,<2.0",
+  "pydantic>=2.11,<3.0",
+  "pydantic-settings>=2.8,<3.0",
+]
+
+[dependency-groups]
+dev = [
+  "pyright>=1.1.400",
+  "pytest>=8.4,<9.0",
+  "ruff>=0.11.0,<0.12.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent", "src/shared"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"

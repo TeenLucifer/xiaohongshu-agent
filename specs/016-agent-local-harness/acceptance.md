@@ -23,6 +23,10 @@
 19. 确认输出为结构化结果，包含 `session_id / final_text / tool_calls / artifacts`
 20. 使用 `--verbose` 运行
 21. 确认会显示更多 tool 摘要与调试信息
+22. 使用 `smoke run` 或 `smoke test` 作为输入运行
+23. 确认 harness 会将其转成明确的 session 自检任务，而不是原样把模糊文本直接交给模型
+24. 在空 session 目录中运行上述输入
+25. 确认默认行为是目录自检与最小文件读写闭环，而不是因为“没有代码”直接判定 smoke 无法执行
 
 ## 自动化验收
 
@@ -35,6 +39,7 @@
 - `--verbose` 输出测试通过
 - 退出码测试通过
 - 最小 smoke run 测试通过
+- `smoke run` 语义规范化测试通过
 
 ## 已知限制
 

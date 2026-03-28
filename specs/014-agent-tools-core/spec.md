@@ -69,6 +69,7 @@
   - fork bomb
 - `exec` 保留 nanobot 风格的 internal/private URL 拦截与 workspace 越界检测
 - 首版默认允许的命令前缀固定为：
+  - `pwd`
   - `python`
   - `python3`
   - `node`
@@ -84,11 +85,15 @@
   - `npx playwright`
 - 包装前缀只放行特定组合，不放开任意 `uv run ...` 或 `npx ...`
 - 默认不放行：
+  - `ls`
+  - `cat`
   - `git`
   - `npm install`
   - `pip install`
   - 任意非 allowlist 命令前缀
   - 任意破坏性命令
+- 目录查看继续优先使用 `list_dir`
+- 文件读取继续优先使用 `read_file`
 
 ## 验收标准
 
@@ -97,6 +102,7 @@
 - `read_file` 可读取文本和图片
 - `edit_file` 的模糊匹配替换生效
 - `exec` 的默认 timeout、最大 timeout 与输出截断行为符合约束
+- `pwd` 可作为最小诊断命令执行
 - 非 allowlist 命令前缀被拒绝
 - `uv run` / `npx` 仅特定组合可通过
 - deny guard 危险命令被拦截
