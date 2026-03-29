@@ -20,11 +20,12 @@ class ContextBuilder:
     def build_system_prompt(
         self,
         *,
+        workspace_path: Path,
         memory_context: str = "",
         always_skills: str = "",
         skills_summary: str = "",
     ) -> str:
-        parts: list[str] = [self._build_identity_rules()]
+        parts: list[str] = [self._build_identity_rules(workspace_path=workspace_path)]
 
         parts.append(self._build_memory_section(memory_context))
 
@@ -57,9 +58,37 @@ class ContextBuilder:
         )
         return messages
 
-    def _build_identity_rules(self) -> str:
+    def _build_identity_rules(self, *, workspace_path: Path) -> str:
+        skills_root = self._project_root / "skills"
+        top_level_rule = (
+            f"- 若 skill 文件位于 {skills_root}/<name>/SKILL.md，"
+            f"则默认执行根目录为 {skills_root}/<name>"
+        )
+        nested_rule = (
+            f"- 若 skill 文件位于 {skills_root}/<bundle>/skills/<child>/SKILL.md，"
+            f"则默认执行根目录为 {skills_root}/<bundle>"
+        )
+        accessible_paths = "\n".join(
+            [
+                "当前允许访问的目录包括：",
+                f"- {workspace_path}",
+                f"- {skills_root}",
+                "",
+                "builtin skill 的相对路径命令解析规则：",
+                top_level_rule,
+                nested_rule,
+                (
+                    "- 当命令示例使用 `python scripts/...` 这类相对路径时，"
+                    "不要在 session workspace 中直接执行。"
+                ),
+            ]
+        )
         return "\n".join(
-            [f"# {self._prompt_config.identity.title}", *self._prompt_config.identity.rules]
+            [
+                f"# {self._prompt_config.identity.title}",
+                *self._prompt_config.identity.rules,
+                accessible_paths,
+            ]
         )
 
     def _build_memory_section(self, memory_context: str) -> str:

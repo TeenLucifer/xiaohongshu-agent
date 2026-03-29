@@ -252,6 +252,7 @@ class LoopRunner:
     ) -> list[PromptMessage]:
         memory_context = MemoryStore(session.workspace_path).get_memory_context()
         system_prompt = context_builder.build_system_prompt(
+            workspace_path=session.workspace_path,
             memory_context=memory_context,
             always_skills=skills_loader.load_always_skills_for_context(
                 workspace_path=session.workspace_path

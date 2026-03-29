@@ -144,10 +144,12 @@ PYTHONPATH=src .venv/bin/python -m agent.local_harness run \
 
 ## TODO
 
-- [ ] 真实 xhs 任务与 agent 联调
+- [x] 真实 xhs 任务与 agent 联调：搜索任务能实现
 - [ ] 流式输出
 - [ ] 后端
 - [ ] 与前端对接
+- [ ] 提示词调优，路径约束单独一部分，角色定义
+- [ ] 真实 xhs 任务与 agent 联调：发散搜索，同一个话题多个角度；帖子阅读；帖子下载
 
 ## 说明
 

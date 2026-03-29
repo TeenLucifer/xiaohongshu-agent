@@ -255,6 +255,7 @@ def test_runtime_injects_memory_context_into_system_prompt(tmp_path: Path) -> No
             skills_loader = cast(SkillsLoader, kwargs["skills_loader"])
             messages = context_builder.build_messages(
                 system_prompt=context_builder.build_system_prompt(
+                    workspace_path=session_obj.workspace_path,
                     memory_context=MemoryStore(session_obj.workspace_path).get_memory_context(),
                     always_skills=skills_loader.load_always_skills_for_context(
                         workspace_path=session_obj.workspace_path

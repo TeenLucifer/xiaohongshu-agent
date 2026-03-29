@@ -42,7 +42,7 @@
 - 文件系统工具拆分与 `nanobot` 一致，不做聚合型 `file_system` 单工具
 - 文件系统参数模型完全贴 `nanobot`：
   - `allowed_dir = session.workspace_path`
-  - `extra_allowed_dirs = [skill_dir, temp_dir]`
+  - `extra_allowed_dirs = [project_root/skills, skill_dir, temp_dir]`
 - 路径解析、越界判断、allowed/extra allowed 语义与 `nanobot` 一致
 - `read_file` 同时支持文本与图片读取
 - `edit_file` 保留 `nanobot` 风格的模糊匹配/去空白匹配/fallback 替换能力
@@ -68,6 +68,9 @@
   - `shutdown` / `reboot` / `poweroff`
   - fork bomb
 - `exec` 保留 nanobot 风格的 internal/private URL 拦截与 workspace 越界检测
+- `working_dir` 是首版唯一受支持的目录切换机制
+- 首版不支持通过 `cd` 切目录
+- 首版不鼓励使用 `&&` 进行 shell 串联
 - 首版默认允许的命令前缀固定为：
   - `pwd`
   - `python`
@@ -85,25 +88,33 @@
   - `npx playwright`
 - 包装前缀只放行特定组合，不放开任意 `uv run ...` 或 `npx ...`
 - 默认不放行：
+  - `cd`
   - `ls`
   - `cat`
   - `git`
   - `npm install`
   - `pip install`
+  - 依赖 `&&` 串联的 shell 组合写法
   - 任意非 allowlist 命令前缀
   - 任意破坏性命令
 - 目录查看继续优先使用 `list_dir`
 - 文件读取继续优先使用 `read_file`
+- 需要在某个目录中执行命令时，应通过 `exec.command + exec.working_dir` 组合完成，而不是把目录切换写进 `command`
+- runtime 默认会将项目根目录 `skills/` 注入工具执行上下文，使 builtin skills 的 `SKILL.md`、脚本和资源文件可直接访问
+- runtime 应通过 system prompt 告知模型这些默认可访问目录与命令约束，而不是依赖 harness 或 user prompt 重复注入
 
 ## 验收标准
 
 - `ToolRegistry` 可注册、查询和执行全部默认工具
 - 文件系统工具只能访问 `allowed_dir` 与 `extra_allowed_dirs`
+- 默认工具上下文会包含项目根目录 `skills/`
 - `read_file` 可读取文本和图片
 - `edit_file` 的模糊匹配替换生效
 - `exec` 的默认 timeout、最大 timeout 与输出截断行为符合约束
 - `pwd` 可作为最小诊断命令执行
+- `exec.working_dir` 可作为唯一目录切换机制正常工作
 - 非 allowlist 命令前缀被拒绝
+- `cd` 与依赖 `&&` 的命令写法被拒绝
 - `uv run` / `npx` 仅特定组合可通过
 - deny guard 危险命令被拦截
 - 参数校验和错误返回清晰可测

@@ -71,7 +71,10 @@ class AgentRuntime:
         self._ensure_memory_consolidator()
         if isinstance(self.loop_runner, LoopRunner):
             self.loop_runner.trace_sink = self._trace_sink
-        extra_allowed_dirs = [session.workspace_path / "tmp"]
+        extra_allowed_dirs = [
+            session.workspace_path / "tmp",
+            self.project_root / "skills",
+        ]
         metadata_extra_dirs = request.metadata.get("extra_allowed_dirs", [])
         if isinstance(metadata_extra_dirs, list):
             string_paths = [Path(value) for value in metadata_extra_dirs if isinstance(value, str)]

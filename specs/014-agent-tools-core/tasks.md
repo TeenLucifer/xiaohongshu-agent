@@ -8,8 +8,8 @@
 
 - [x] 建立 `Tool` 基类与 `ToolsRegistry`，固定默认工具注册和执行上下文边界。
 - [x] 完成文件系统工具集：`read_file`、`write_file`、`edit_file`、`list_dir`。
-- [x] 固定文件系统权限边界，将路径限制在 session 工作目录、临时目录和 skill 目录内。
-- [x] 完成 `exec` 工具、allowlist、deny guard、workspace 越界拦截和默认超时策略。
+- [x] 固定文件系统权限边界，将路径限制在 session 工作目录、临时目录和 skill 目录内，并默认放开项目根目录 `skills/`。
+- [x] 完成 `exec` 工具、allowlist、deny guard、workspace 越界拦截和默认超时策略，并明确仅通过 `working_dir` 切目录。
 - [x] 统一工具层参数校验、错误表达与输出截断行为。
 
 ## 当前待办

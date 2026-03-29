@@ -52,6 +52,16 @@ def test_filesystem_tools_read_write_and_list_dir(tmp_path: Path) -> None:
     assert cast(list[dict[str, Any]], list_payload["entries"])[0]["name"] == "idea.txt"
 
 
+def test_filesystem_tools_can_read_files_from_extra_allowed_skill_dirs(tmp_path: Path) -> None:
+    registry, _, extra, _ = make_registry(tmp_path)
+    skill_file = extra / "SKILL.md"
+    skill_file.write_text("demo skill", encoding="utf-8")
+
+    result = registry.execute_tool("read_file", {"path": str(skill_file)})
+
+    assert result == "demo skill"
+
+
 def test_read_file_supports_images(tmp_path: Path) -> None:
     registry, workspace, _, _ = make_registry(tmp_path)
     image_path = workspace / "tiny.png"
@@ -105,6 +115,27 @@ def test_exec_allows_pwd_but_blocks_other_diagnostic_commands(tmp_path: Path) ->
 
     with pytest.raises(ToolExecutionError):
         registry.execute_tool("exec", {"command": "cat README.md"})
+
+
+def test_exec_can_run_python_scripts_inside_extra_allowed_skill_dirs(tmp_path: Path) -> None:
+    registry, _, extra, _ = make_registry(tmp_path)
+    scripts_dir = extra / "scripts"
+    scripts_dir.mkdir(parents=True)
+    script = scripts_dir / "hello.py"
+    script.write_text("print('skill ok')\n", encoding="utf-8")
+
+    result = registry.execute_tool(
+        "exec",
+        {
+            "command": "python scripts/hello.py",
+            "working_dir": str(extra),
+            "timeout": 5,
+        },
+    )
+
+    output = cast(str, result)
+    assert "Exit code: 0" in output
+    assert "skill ok" in output
 
 
 def test_exec_blocks_dangerous_commands_even_if_prefixed(tmp_path: Path) -> None:

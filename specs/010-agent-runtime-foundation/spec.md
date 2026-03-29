@@ -169,10 +169,20 @@ always skills 规则：
 
 `ContextBuilder` 的系统级规则必须明确：
 
-- agent 只能在当前 `session workspace` 内工作
+- agent 只能在当前允许访问的目录内工作
 - 不要假设可访问项目根目录、宿主根目录或任意绝对路径
+- 当前允许访问的目录应在 system prompt 中显式告知模型，而不是让模型自行猜测
+  - 至少包含当前 `session workspace`
+  - 至少包含项目根目录 `skills/`
+  - 不暴露 `allowed_dir`、`extra_allowed_dirs` 等内部实现字段名
 - 查看目录优先使用 `list_dir`
 - 读取文件优先使用 `read_file`
+- 执行命令时不要使用 `cd`、`&&`、`ls`、`cat` 这类 shell 诊断或串联写法
+- 需要在某个目录中执行命令时，只能通过 `exec.working_dir`
+- 当 skill 文档中的命令使用相对路径（例如 `python scripts/cli.py ...`）时，不得在当前 `session workspace` 中直接执行，而应将 `exec.working_dir` 设为该 skill 的执行根目录
+- 对 builtin skills：
+  - 若 skill 文件位于 `project_root/skills/<name>/SKILL.md`，则执行根目录为 `project_root/skills/<name>`
+  - 若 skill 文件位于 `project_root/skills/<bundle>/skills/<child>/SKILL.md`，则执行根目录为 `project_root/skills/<bundle>`
 
 ### 静态 prompt 配置边界
 

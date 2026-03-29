@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 import pytest
 
@@ -27,14 +27,17 @@ class CapturingLoopRunner(LoopRunner):
     def __init__(self) -> None:
         self.captured_messages: list[PromptMessage] | None = None
         self.captured_request: RunRequest | None = None
+        self.captured_tools_registry: object | None = None
 
     def run(self, **kwargs: object) -> RunResult:  # type: ignore[override]
         self.captured_request = cast(RunRequest, kwargs["request"])
+        self.captured_tools_registry = kwargs["tools_registry"]
         session = cast(AnySession, kwargs["session"])
         context_builder = cast(ContextBuilder, kwargs["context_builder"])
         skills_loader = cast(SkillsLoader, kwargs["skills_loader"])
         memory_context = MemoryStore(session.workspace_path).get_memory_context()
         system_prompt = context_builder.build_system_prompt(
+            workspace_path=session.workspace_path,
             memory_context=memory_context,
             always_skills=skills_loader.load_always_skills_for_context(
                 workspace_path=session.workspace_path
@@ -89,6 +92,7 @@ def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> 
     builder = ContextBuilder(project_root=tmp_path)
 
     prompt = builder.build_system_prompt(
+        workspace_path=tmp_path / "data" / "sessions" / "sess-1",
         memory_context="long-term memory",
         always_skills="always skill body",
         skills_summary="<skills></skills>",
@@ -102,8 +106,25 @@ def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> 
     assert identity_idx < memory_idx < always_skills_idx < skills_summary_idx
     assert "# Bootstrap Files" not in prompt
     assert "AGENTS.md" not in prompt
-    assert "你只能在当前 session workspace 内工作。" in prompt
+    assert "你只能在当前允许访问的目录内工作。" in prompt
     assert "查看目录时优先使用 list_dir" in prompt
+    assert "执行命令时不要使用 cd、&&、ls、cat" in prompt
+    assert "只能通过 exec.working_dir" in prompt
+    assert "不要在当前 session workspace 中直接执行" in prompt
+    assert "当前允许访问的目录包括：" in prompt
+    assert f"- {tmp_path / 'data' / 'sessions' / 'sess-1'}" in prompt
+    assert f"- {tmp_path / 'skills'}" in prompt
+    assert "builtin skill 的相对路径命令解析规则：" in prompt
+    top_level_rule = (
+        f"- 若 skill 文件位于 {tmp_path / 'skills'}/<name>/SKILL.md，"
+        f"则默认执行根目录为 {tmp_path / 'skills'}/<name>"
+    )
+    nested_rule = (
+        f"- 若 skill 文件位于 {tmp_path / 'skills'}/<bundle>/skills/<child>/SKILL.md，"
+        f"则默认执行根目录为 {tmp_path / 'skills'}/<bundle>"
+    )
+    assert top_level_rule in prompt
+    assert nested_rule in prompt
     assert "smoke run" not in prompt
     assert "如果你要使用某个 skill，请先读取对应的 SKILL.md" in prompt
 
@@ -156,6 +177,27 @@ def test_run_delegates_to_loop_runner_and_returns_run_result(tmp_path: Path) -> 
     assert loop_runner.captured_messages is not None
     assert loop_runner.captured_messages[0].role == "system"
     assert loop_runner.captured_messages[-1].role == "user"
+
+
+def test_run_includes_project_skills_dir_in_default_extra_allowed_dirs(tmp_path: Path) -> None:
+    loop_runner = CapturingLoopRunner()
+    runtime = AgentRuntime(project_root=tmp_path, loop_runner=loop_runner)
+    snapshot = runtime.create_session(topic="topic")
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True)
+
+    runtime.run(
+        RunRequest(
+            session_id=snapshot.session_id,
+            user_input="执行一次",
+        )
+    )
+
+    assert loop_runner.captured_tools_registry is not None
+    tools_registry = cast(Any, loop_runner.captured_tools_registry)
+    extra_allowed_dirs = cast(list[Path], tools_registry._context.extra_allowed_dirs)
+    assert snapshot.workspace_path / "tmp" in extra_allowed_dirs
+    assert skills_dir in extra_allowed_dirs
 
 
 def test_run_uses_session_get_history_not_raw_messages(tmp_path: Path) -> None:

@@ -23,8 +23,14 @@
    - system
    - session history
    - current user message
-8. 检查当前 user message 内是否包含 runtime context，且只包含时间、`session_id` 和 `workspace_path`
+8. 检查当前 user message 内是否包含 runtime context，且至少包含时间、`session_id` 和 `workspace_path`
 8.1 检查 `Current Time` 来自统一时间入口，且默认使用 `Asia/Shanghai`
+8.2 检查 system prompt 中明确写出当前可访问目录，且至少包含当前 session workspace 与项目根目录 `skills/`
+8.3 检查 system prompt 中明确写出：
+   - 不使用 `cd`、`&&`、`ls`、`cat`
+   - 需要切目录时使用 `exec.working_dir`
+   - skill 文档中的相对路径命令不能直接在 session workspace 中执行
+   - nested builtin skill 的执行根目录会回退到其 bundle 根目录
 9. 调用 `run(...)`，确认输入不包含显式 skill 指定
 10. 确认 `RunResult` 返回：
    - `session_id`

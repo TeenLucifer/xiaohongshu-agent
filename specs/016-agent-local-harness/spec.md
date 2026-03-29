@@ -66,6 +66,7 @@
 - local harness 默认 smoke 语义是 session 目录自检，而不是仓库级 smoke test
 - 当 `user_input` 表述为 `smoke run` / `smoke test` 时，harness 应在送入 runtime 前将任务规范化为明确的 session 自检说明
 - `smoke run` / `smoke test` 的具体任务规范化只发生在 harness 层，不属于 system prompt 的固定规则
+- 执行边界、可访问目录与 `working_dir` 规则由 runtime system prompt 负责，harness 不重复注入这些稳定规则
 - 默认联调应围绕：
   - 确认当前工作目录
   - 查看 session 目录
