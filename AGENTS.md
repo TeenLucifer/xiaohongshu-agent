@@ -53,26 +53,25 @@
 
 ## 当前仓库状态
 
-当前已经完成的主要部分是前端原型：
+当前主分支已经完成的主要部分：
 
-- 三栏工作台
-- 候选帖子区
-- 内容创作展示区
-- 聊天式主栏
+- 前端三栏工作台
+- 话题列表、创建/删除与真实 topic 管理
+- 聊天式主栏与真实后端 run API
+- Agent Runtime 首版
+- Session / History 子系统
+- Context Memory 子系统
+- 后端最小胶水层
+- session workspace 数据层
+- 候选帖子与总结的右侧工作区真实化
 
-当前还没有正式落地的部分：
+当前仍在继续推进的部分：
 
-- Agent Runtime 代码实现
-- Session / History 子系统实现
-- Context Memory 子系统实现
-- 后端胶水层
-- 文件化持久层
+- 更完整的右侧工作区真实化
+- 流式输出
+- 更深入的 xhs 任务执行能力
 
-当前已经完成但尚未实现代码的部分：
-
-- `010~016` agent 侧 specs
-
-所以后续如果进入 agent / 后端阶段，应继续沿新编号推进，不再把任务堆进 `001~004`。
+所以后续如果进入 agent / 后端阶段，应继续沿 `010+` 和 `020+` 的编号推进，不再把任务堆进 `001~004`。
 
 ## 新 Feature 约定
 
@@ -102,6 +101,17 @@
   - nanobot 风格 skills 扫描与加载
 - `016-agent-local-harness`
   - 本地 Python 调用入口与 smoke harness
+
+### 后端与集成
+
+- `020-backend-glue-minimal`
+  - 最小后端胶水层、`topic_id -> active_session_id` 映射与同步主栏 API
+- `021-topic-truth-store`
+  - session workspace 数据层、候选帖子/总结/文案/图片等右侧工作区对象存储
+- `022-streaming-run-api`
+  - 基于后端 run 接口的流式输出协议与主栏渐进展示能力
+- `023-topic-management`
+  - topic 列表、创建/删除、`topic_id` 生成与 active session 建立
 
 ## 文档边界
 

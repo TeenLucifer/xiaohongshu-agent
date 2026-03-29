@@ -44,8 +44,15 @@ export interface CandidatePost {
   heat: string;
   sourceUrl: string;
   imageUrl: string;
+  images: CandidatePostImage[];
   selected: boolean;
   manualOrder: number | null;
+}
+
+export interface CandidatePostImage {
+  id: string;
+  imageUrl: string;
+  alt: string;
 }
 
 export interface PatternSummaryContent {

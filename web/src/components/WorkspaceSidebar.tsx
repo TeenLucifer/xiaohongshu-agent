@@ -1,7 +1,7 @@
 import { Clock3, FolderKanban, PanelLeftClose, Settings, Sparkles } from "lucide-react";
 import { NavLink } from "react-router-dom";
-import { mockTopics } from "../data/mockTopics";
 import { cn } from "../lib/cn";
+import type { TopicCard } from "../types/workspace";
 import { Button } from "./ui/Button";
 
 const navigationItems = [
@@ -14,10 +14,12 @@ const navigationItems = [
 export function WorkspaceSidebar({
   collapsed,
   currentTopicId,
+  topics,
   onToggleCollapse
 }: {
   collapsed: boolean;
   currentTopicId: string;
+  topics: TopicCard[];
   onToggleCollapse: () => void;
 }): JSX.Element {
   if (collapsed) {
@@ -108,7 +110,7 @@ export function WorkspaceSidebar({
       <div className="mt-8">
         <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">话题切换</p>
         <div className="mt-3 grid gap-2">
-          {mockTopics.map((topic) => (
+          {topics.map((topic) => (
             <NavLink
               className={({ isActive }) =>
                 cn(

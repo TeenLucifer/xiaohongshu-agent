@@ -99,6 +99,7 @@ class LoopRunner:
             context_builder=context_builder,
             skills_loader=skills_loader,
         )
+        session.add_message(SessionMessage(role="user", content=request.user_input))
         tool_definitions = tools_registry.list_tool_definitions()
         tool_summaries: list[ToolCallSummary] = []
         self._record_trace(

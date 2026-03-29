@@ -141,7 +141,8 @@ def test_loop_stops_when_model_returns_no_tool_calls(tmp_path: Path) -> None:
 
     assert result.final_text == "done"
     assert saved_sessions == [session.session_id]
-    assert [message.role for message in session.messages] == ["assistant"]
+    assert [message.role for message in session.messages] == ["user", "assistant"]
+    assert session.messages[0].content == "执行"
 
 
 def test_loop_executes_tool_calls_and_reinjects_results_in_order(tmp_path: Path) -> None:
@@ -174,13 +175,14 @@ def test_loop_executes_tool_calls_and_reinjects_results_in_order(tmp_path: Path)
 
     assert result.final_text == "done"
     assert [message.role for message in session.messages] == [
+        "user",
         "assistant",
         "tool",
         "tool",
         "assistant",
     ]
-    assert session.messages[1].tool_call_id == "call-1"
-    assert session.messages[2].tool_call_id == "call-2"
+    assert session.messages[2].tool_call_id == "call-1"
+    assert session.messages[3].tool_call_id == "call-2"
     second_call_messages = model.calls[1]
     assert [message.role for message in second_call_messages[-3:]] == ["assistant", "tool", "tool"]
     assert [summary.name for summary in result.tool_calls] == ["alpha", "beta"]
@@ -215,7 +217,7 @@ def test_loop_turns_tool_failures_into_tool_messages(tmp_path: Path) -> None:
     )
 
     assert result.final_text == "done"
-    assert session.messages[1].content == "Error: ValueError: boom"
+    assert session.messages[2].content == "Error: ValueError: boom"
     assert result.tool_calls[0].result_summary == "Error: ValueError: boom"
 
 

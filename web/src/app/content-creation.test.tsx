@@ -1,11 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { within } from "@testing-library/react";
 import { AppRoutes } from "./routes";
 
-function renderWorkspace(): ReturnType<typeof render> {
-  return render(
+async function renderWorkspace(): Promise<ReturnType<typeof render>> {
+  const view = render(
     <MemoryRouter
       future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
       initialEntries={["/topics/topic-spring-commute"]}
@@ -13,47 +12,60 @@ function renderWorkspace(): ReturnType<typeof render> {
       <AppRoutes />
     </MemoryRouter>
   );
+  await screen.findByRole("complementary", { name: "当前工作区" });
+  return view;
 }
 
 describe("content creation feature", () => {
-  it("renders summary and copy as agent replies in the main chat column", () => {
-    renderWorkspace();
+  it("renders summary in the main chat column and keeps structured content in the right workspace", async () => {
+    await renderWorkspace();
 
-    expect(screen.getByText(/这批内容的共性很稳定/)).toBeInTheDocument();
-    expect(screen.getByText("已生成一版完整文案，你可以直接在这里修改。")).toBeInTheDocument();
+    expect(await screen.findByText(/这批内容的共性很稳定/)).toBeInTheDocument();
+    expect(screen.queryByText("已生成一版完整文案，你可以直接在这里修改。")).not.toBeInTheDocument();
     expect(screen.queryByText("标题模式")).not.toBeInTheDocument();
   });
 
-  it("opens the copy reply into edit mode and edits the draft", async () => {
+  it("shows the current copy draft in the right workspace panel", async () => {
     const user = userEvent.setup();
-    renderWorkspace();
+    await renderWorkspace();
 
-    expect(screen.queryByLabelText("笔记标题")).not.toBeInTheDocument();
+    const copyToggle = screen.getByRole("button", { name: "展开文案" });
+    const copyGroup = copyToggle.closest("section");
+    if (!(copyGroup instanceof HTMLElement)) {
+      throw new Error("copy group not found");
+    }
 
-    await user.click(screen.getByRole("button", { name: "编辑" }));
+    await user.click(copyToggle);
 
-    const titleInput = screen.getByLabelText("笔记标题");
-    const bodyInput = screen.getByLabelText("笔记正文");
-
-    expect(titleInput).toHaveValue("通勤穿搭别再乱买了，4 件基础单品就够用");
-
-    await user.clear(titleInput);
-    await user.type(titleInput, "新的通勤标题");
-    await user.type(bodyInput, "\n补一段结尾。");
-
-    expect(titleInput).toHaveValue("新的通勤标题");
-    expect((bodyInput as HTMLTextAreaElement).value).toContain("补一段结尾。");
+    expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
+    expect(
+      within(copyGroup).getByRole("heading", {
+        name: "通勤穿搭别再乱买了，4 件基础单品就够用",
+        level: 3
+      })
+    ).toBeInTheDocument();
+    expect(within(copyGroup).queryByRole("button", { name: "编辑" })).not.toBeInTheDocument();
   });
 
   it("shows copy summary and grouped images in the right workspace", async () => {
     const user = userEvent.setup();
-    renderWorkspace();
+    await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: "展开文案" }));
-    const copyGroup = screen.getByRole("heading", { name: "文案", level: 2 }).closest("section");
+    const summaryToggle = screen.getByRole("button", { name: "展开总结" });
+    const summaryGroup = summaryToggle.closest("section");
+    if (!(summaryGroup instanceof HTMLElement)) {
+      throw new Error("summary group not found");
+    }
+    await user.click(summaryToggle);
+    expect(within(summaryGroup).getByText("标题模式")).toBeInTheDocument();
+    expect(within(summaryGroup).getByText("高频关键词")).toBeInTheDocument();
+
+    const copyToggle = screen.getByRole("button", { name: "展开文案" });
+    const copyGroup = copyToggle.closest("section");
     if (!(copyGroup instanceof HTMLElement)) {
       throw new Error("copy group not found");
     }
+    await user.click(copyToggle);
     expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
     expect(within(copyGroup).getByRole("heading", { name: "通勤穿搭别再乱买了，4 件基础单品就够用", level: 3 })).toBeInTheDocument();
 

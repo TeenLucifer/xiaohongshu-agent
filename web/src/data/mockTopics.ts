@@ -27,6 +27,14 @@ function createSvgCover(label: string, startColor: string, endColor: string): st
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
+function buildCandidateImages(...urls: string[]) {
+  return urls.map((imageUrl, index) => ({
+    id: `image-${index + 1}`,
+    imageUrl,
+    alt: `候选帖图片 ${index + 1}`
+  }));
+}
+
 export const mockTopics: TopicCard[] = [
   {
     id: "topic-spring-commute",
@@ -81,6 +89,11 @@ export const mockCandidatePostsByTopicId: Record<string, CandidatePost[]> = {
       heat: "收藏 3.2w · 点赞 1.6w",
       sourceUrl: "https://www.xiaohongshu.com/explore/suit-looks",
       imageUrl: "/references/ScreenShot_2026-03-26_201829_887.png",
+      images: buildCandidateImages(
+        "/references/ScreenShot_2026-03-26_201829_887.png",
+        createSvgCover("西装细节", "#c0d0ec", "#6f85b5"),
+        createSvgCover("搭配公式", "#dfbca6", "#8e5c42")
+      ),
       selected: true,
       manualOrder: 1
     },
@@ -94,6 +107,10 @@ export const mockCandidatePostsByTopicId: Record<string, CandidatePost[]> = {
       heat: "收藏 2.4w · 点赞 1.1w",
       sourceUrl: "https://www.xiaohongshu.com/explore/makeup-outfit",
       imageUrl: createSvgCover("通勤妆容", "#f7b3b7", "#d65978"),
+      images: buildCandidateImages(
+        createSvgCover("通勤妆容", "#f7b3b7", "#d65978"),
+        createSvgCover("妆容步骤", "#f0c2d3", "#c56d90")
+      ),
       selected: false,
       manualOrder: null
     },
@@ -107,6 +124,10 @@ export const mockCandidatePostsByTopicId: Record<string, CandidatePost[]> = {
       heat: "收藏 2.9w · 点赞 1.3w",
       sourceUrl: "https://www.xiaohongshu.com/explore/budget-closet",
       imageUrl: createSvgCover("衣橱整理", "#ffc76e", "#b86d06"),
+      images: buildCandidateImages(
+        createSvgCover("衣橱整理", "#ffc76e", "#b86d06"),
+        createSvgCover("基础单品", "#ffdca7", "#c98727")
+      ),
       selected: true,
       manualOrder: 2
     },
@@ -120,6 +141,7 @@ export const mockCandidatePostsByTopicId: Record<string, CandidatePost[]> = {
       heat: "收藏 1.8w · 点赞 9.6k",
       sourceUrl: "https://www.xiaohongshu.com/explore/cardigan-week",
       imageUrl: createSvgCover("薄针织", "#abc6ea", "#5674b8"),
+      images: buildCandidateImages(createSvgCover("薄针织", "#abc6ea", "#5674b8")),
       selected: false,
       manualOrder: null
     }

@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AppRoutes } from "./routes";
 
-function renderWorkspace(): ReturnType<typeof render> {
-  return render(
+async function renderWorkspace(): Promise<ReturnType<typeof render>> {
+  const view = render(
     <MemoryRouter
       future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
       initialEntries={["/topics/topic-spring-commute"]}
@@ -12,11 +12,13 @@ function renderWorkspace(): ReturnType<typeof render> {
       <AppRoutes />
     </MemoryRouter>
   );
+  await screen.findByRole("complementary", { name: "当前工作区" });
+  return view;
 }
 
 describe("candidate posts feature", () => {
-  it("renders tiny image-first cards and uses the real reference image on the first card", () => {
-    renderWorkspace();
+  it("renders tiny image-first cards and uses the real reference image on the first card", async () => {
+    await renderWorkspace();
 
     const cards = screen.getByRole("complementary", { name: "当前工作区" }).querySelectorAll("button[aria-haspopup='dialog']");
     expect(cards.length).toBeGreaterThanOrEqual(4);
@@ -28,7 +30,7 @@ describe("candidate posts feature", () => {
 
   it("opens and closes the post detail modal via close button and escape", async () => {
     const user = userEvent.setup();
-    renderWorkspace();
+    await renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: /早八不费力通勤妆 \+ 穿搭/ }));
 
@@ -49,7 +51,7 @@ describe("candidate posts feature", () => {
 
   it("closes the modal when clicking the backdrop and toggles selection inside the modal", async () => {
     const user = userEvent.setup();
-    const { container } = renderWorkspace();
+    const { container } = await renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: /早八不费力通勤妆 \+ 穿搭/ }));
     const dialog = screen.getByRole("dialog", { name: "早八不费力通勤妆 + 穿搭" });
@@ -71,7 +73,7 @@ describe("candidate posts feature", () => {
 
   it("supports manual ordering inside the modal and keeps order markers inline", async () => {
     const user = userEvent.setup();
-    renderWorkspace();
+    await renderWorkspace();
 
     await user.click(screen.getByRole("button", { name: /低预算通勤衣橱整理术/ }));
     const dialog = screen.getByRole("dialog", { name: "低预算通勤衣橱整理术" });
@@ -83,5 +85,40 @@ describe("candidate posts feature", () => {
       expect(firstSelectedCard).toBeInTheDocument();
       expect(screen.queryByRole("list", { name: "已选帖子顺序" })).not.toBeInTheDocument();
     });
+  });
+
+  it("supports multi-image paging inside the post detail modal", async () => {
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: /春日通勤西装 3 套搭法/ }));
+    const dialog = screen.getByRole("dialog", { name: "春日通勤西装 3 套搭法" });
+
+    expect(within(dialog).getByRole("img", { name: "候选帖图片 1" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "上一张图片" })).toBeDisabled();
+    expect(within(dialog).getByRole("button", { name: "下一张图片" })).toBeEnabled();
+
+    await user.click(within(dialog).getByRole("button", { name: "下一张图片" }));
+    expect(within(dialog).getByRole("img", { name: "候选帖图片 2" })).toBeInTheDocument();
+
+    await user.keyboard("{ArrowRight}");
+    expect(within(dialog).getByRole("img", { name: "候选帖图片 3" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "下一张图片" })).toBeDisabled();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(within(dialog).getByRole("img", { name: "候选帖图片 2" })).toBeInTheDocument();
+  });
+
+  it("keeps single-image posts on the current detail layout without paging controls", async () => {
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: /薄针织 \+ 西裤，通勤一周不重样/ }));
+    const dialog = screen.getByRole("dialog", { name: "薄针织 + 西裤，通勤一周不重样" });
+
+    expect(within(dialog).getByRole("img", { name: "候选帖图片 1" })).toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "上一张图片" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "下一张图片" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText("图片位置指示")).not.toBeInTheDocument();
   });
 });

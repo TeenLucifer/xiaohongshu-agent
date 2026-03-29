@@ -1,26 +1,43 @@
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, SendHorizontal } from "lucide-react";
-import { startTransition, useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { ChevronLeft, ChevronRight, SendHorizontal, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { AgentTimeline } from "../components/AgentTimeline";
 import { CandidatePostsSection } from "../components/CandidatePostsSection";
 import { ContextPanelGroup } from "../components/ContextPanelGroup";
 import { CopyDraftSummaryPanel } from "../components/CopyDraftSummaryPanel";
 import { ImageResultsPanel } from "../components/ImageResultsPanel";
+import { PatternSummarySection } from "../components/PatternSummarySection";
 import { WorkspaceSidebar } from "../components/WorkspaceSidebar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Surface } from "../components/ui/Surface";
+import {
+  deleteTopic,
+  getWorkspace,
+  getWorkspaceContext,
+  listTopics,
+  runTopic,
+  toChatMessages,
+  toTopicCards,
+} from "../lib/api";
 import {
   mockCandidatePostsByTopicId,
   mockChatMessagesByTopicId,
   mockCopyDraftByTopicId,
   mockImageTasksByTopicId,
   mockMaterialPreviewByTopicId,
-  mockTopics,
-  mockWorkspaces
+  mockPatternSummaryByTopicId,
 } from "../data/mockTopics";
-import type { ChatMessage, CopyDraftContent, WorkspaceSectionId } from "../types/workspace";
+import type {
+  CandidatePost,
+  ChatMessage,
+  CopyDraftContent,
+  PatternSummaryContent,
+  TopicCard,
+  WorkspaceSection,
+  WorkspaceSectionId,
+} from "../types/workspace";
 
 const defaultExpandedGroups: Record<WorkspaceSectionId, boolean> = {
   materials: false,
@@ -29,84 +46,284 @@ const defaultExpandedGroups: Record<WorkspaceSectionId, boolean> = {
   patternSummary: false,
   copyDraft: false,
   imageResults: false,
-  conversationTimeline: false
+  conversationTimeline: false,
 };
 
-function createAgentReply(input: string): ChatMessage {
-  return {
-    id: `message-agent-${Date.now()}`,
-    role: "agent",
-    agentName: "协作 Agent",
-    time: "刚刚",
-    text: `我收到了这轮输入：“${input}”。当前前端原型会先把结果保留在聊天主栏里，后续接入真实后端和 agent 时再替换成实际返回。`
-  };
+const defaultWorkspaceSections: WorkspaceSection[] = [
+  { id: "materials", title: "素材", status: "empty", summary: "当前还没有上传素材。" },
+  { id: "collector", title: "搜集", status: "empty", summary: "等待开始搜集。" },
+  { id: "candidatePosts", title: "搜索结果", status: "empty", summary: "还没有候选帖子。" },
+  { id: "patternSummary", title: "总结", status: "empty", summary: "还没有总结结果。" },
+  { id: "copyDraft", title: "文案", status: "empty", summary: "还没有文案草稿。" },
+  { id: "imageResults", title: "图片", status: "empty", summary: "还没有图片结果。" },
+  { id: "conversationTimeline", title: "对话", status: "empty", summary: "还没有会话记录。" },
+];
+
+function buildWorkspaceSections({
+  candidatePosts,
+  copyDraft,
+  hasMessages,
+  imageGroupCount,
+  isSending,
+  patternSummary,
+}: {
+  candidatePosts: CandidatePost[];
+  copyDraft: CopyDraftContent | undefined;
+  hasMessages: boolean;
+  imageGroupCount: number;
+  isSending: boolean;
+  patternSummary: PatternSummaryContent | undefined;
+}): WorkspaceSection[] {
+  const candidateCount = candidatePosts.length;
+  return [
+    { id: "materials", title: "素材", status: "empty", summary: "当前还没有上传素材。" },
+    {
+      id: "collector",
+      title: "搜集",
+      status: isSending ? "loading" : candidateCount > 0 ? "success" : "empty",
+      summary:
+        candidateCount > 0
+          ? `当前已整理 ${candidateCount} 条候选帖子。`
+          : "等待开始搜集。",
+    },
+    {
+      id: "candidatePosts",
+      title: "搜索结果",
+      status: candidateCount > 0 ? "success" : "empty",
+      summary:
+        candidateCount > 0
+          ? `已返回 ${candidateCount} 条候选帖子，支持查看详情。`
+          : "还没有候选帖子。",
+    },
+    {
+      id: "patternSummary",
+      title: "总结",
+      status: patternSummary ? "success" : "empty",
+      summary: patternSummary ? "当前总结结果已同步到工作区。" : "还没有总结结果。",
+    },
+    {
+      id: "copyDraft",
+      title: "文案",
+      status: copyDraft ? "success" : "empty",
+      summary: copyDraft ? "当前文案支持在中栏进入编辑态。" : "还没有文案草稿。",
+    },
+    {
+      id: "imageResults",
+      title: "图片",
+      status: imageGroupCount > 0 ? "success" : "empty",
+      summary: imageGroupCount > 0 ? "当前图片结果已准备就绪。" : "还没有图片结果。",
+    },
+    {
+      id: "conversationTimeline",
+      title: "对话",
+      status: hasMessages ? "success" : "empty",
+      summary: hasMessages ? "主栏仅展示 user / agent 对话。" : "还没有会话记录。",
+    },
+  ];
 }
 
 export function TopicWorkspacePage(): JSX.Element {
+  const navigate = useNavigate();
   const { topicId: topicIdParam } = useParams<{ topicId: string }>();
-  const topicId = topicIdParam ?? mockTopics[0].id;
-  const workspace = mockWorkspaces[topicId];
-
+  const [topics, setTopics] = useState<TopicCard[]>([]);
+  const [isTopicsLoading, setIsTopicsLoading] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isContextOpen, setIsContextOpen] = useState(true);
   const [expandedGroups, setExpandedGroups] =
     useState<Record<WorkspaceSectionId, boolean>>(defaultExpandedGroups);
   const [composerValue, setComposerValue] = useState("");
-  const [messages, setMessages] = useState<ChatMessage[]>(mockChatMessagesByTopicId[topicId] ?? []);
-  const [copyDraft, setCopyDraft] = useState<CopyDraftContent | undefined>(mockCopyDraftByTopicId[topicId]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [copyDraft, setCopyDraft] = useState<CopyDraftContent | undefined>();
+  const [candidatePosts, setCandidatePosts] = useState<CandidatePost[]>([]);
+  const [patternSummary, setPatternSummary] = useState<PatternSummaryContent | undefined>();
+  const [isMessagesLoading, setIsMessagesLoading] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [isDeletingTopic, setIsDeletingTopic] = useState(false);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsTopicsLoading(true);
+    void listTopics()
+      .then((response) => {
+        if (!cancelled) {
+          const topicCards = toTopicCards(response.items);
+          setTopics(topicCards.length > 0 ? topicCards : []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTopics([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsTopicsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const topicId = topicIdParam ?? topics[0]?.id ?? "";
+  const topic = topics.find((item) => item.id === topicId);
 
   useEffect(() => {
     setExpandedGroups(defaultExpandedGroups);
     setComposerValue("");
-    setMessages(mockChatMessagesByTopicId[topicId] ?? []);
+    setMessages([]);
     setCopyDraft(mockCopyDraftByTopicId[topicId]);
+    setCandidatePosts(mockCandidatePostsByTopicId[topicId] ?? []);
+    setPatternSummary(mockPatternSummaryByTopicId[topicId]);
     setIsSidebarCollapsed(false);
   }, [topicId]);
 
-  const sectionsById = useMemo(() => {
-    if (workspace === undefined) {
-      return {};
+  useEffect(() => {
+    if (topic === undefined) {
+      return;
     }
 
-    return Object.fromEntries(workspace.sections.map((section) => [section.id, section]));
-  }, [workspace]);
+    let cancelled = false;
+    setIsMessagesLoading(true);
+    setMessagesError(null);
+    void getWorkspace(topicId, topic.title)
+      .then((response) => {
+        if (!cancelled) {
+          setMessages(toChatMessages(response.messages));
+        }
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          const message = error instanceof Error ? error.message : "加载会话失败";
+          setMessagesError(message);
+          setMessages(mockChatMessagesByTopicId[topicId] ?? []);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsMessagesLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [topicId, topic]);
+
+  useEffect(() => {
+    if (topic === undefined) {
+      return;
+    }
+
+    let cancelled = false;
+    void getWorkspaceContext(topicId, topic.title)
+      .then((response) => {
+        if (!cancelled) {
+          setCandidatePosts(response.candidate_posts);
+          setPatternSummary(response.pattern_summary ?? mockPatternSummaryByTopicId[topicId]);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCandidatePosts(mockCandidatePostsByTopicId[topicId] ?? []);
+          setPatternSummary(mockPatternSummaryByTopicId[topicId]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [topicId, topic]);
+
+  const workspaceSections = useMemo(
+    () =>
+      buildWorkspaceSections({
+        candidatePosts,
+        copyDraft,
+        hasMessages: messages.length > 0,
+        imageGroupCount: (mockImageTasksByTopicId[topicId] ?? []).length,
+        isSending,
+        patternSummary,
+      }),
+    [candidatePosts, copyDraft, isSending, messages.length, patternSummary, topicId]
+  );
+
+  const sectionsById = useMemo(() => {
+    if (topic === undefined) {
+      return {};
+    }
+    return Object.fromEntries(workspaceSections.map((section) => [section.id, section]));
+  }, [topic, workspaceSections]);
 
   function toggleGroup(sectionId: WorkspaceSectionId): void {
     setExpandedGroups((current) => ({ ...current, [sectionId]: !current[sectionId] }));
   }
 
-  function handleSend(): void {
+  async function handleSend(): Promise<void> {
     const value = composerValue.trim();
-    if (value.length === 0) {
+    if (value.length === 0 || topic === undefined || isSending) {
       return;
     }
-
-    const userMessage: ChatMessage = {
-      id: `message-user-${Date.now()}`,
-      role: "user",
-      text: value,
-      time: "刚刚"
-    };
-
-    startTransition(() => {
-      setMessages((current) => [...current, userMessage, createAgentReply(value)]);
+    setIsSending(true);
+    setMessagesError(null);
+    try {
+      const response = await runTopic(topicId, topic.title, value);
+      setMessages(toChatMessages(response.messages));
       setComposerValue("");
-    });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "发送失败";
+      setMessagesError(message);
+    } finally {
+      setIsSending(false);
+    }
   }
 
-  if (workspace === undefined) {
+  async function handleDeleteCurrentTopic(): Promise<void> {
+    if (topic === undefined || isDeletingTopic) {
+      return;
+    }
+    setIsDeletingTopic(true);
+    setMessagesError(null);
+    try {
+      await deleteTopic(topicId);
+      const response = await listTopics();
+      const remaining = toTopicCards(response.items);
+      setTopics(remaining);
+      if (remaining.length > 0) {
+        navigate(`/topics/${remaining[0].id}`);
+      } else {
+        navigate("/");
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "删除话题失败";
+      setMessagesError(message);
+    } finally {
+      setIsDeletingTopic(false);
+    }
+  }
+
+  if (topic === undefined) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
         <Surface className="max-w-lg p-8 text-center">
-          <h1 className="text-2xl font-semibold text-slate-900">未找到话题</h1>
-          <p className="mt-3 text-sm leading-7 text-slate-500">请从左侧切换到一个有效话题继续查看工作台。</p>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            {isTopicsLoading ? "正在加载话题" : "未找到话题"}
+          </h1>
+          <p className="mt-3 text-sm leading-7 text-slate-500">
+            {isTopicsLoading ? "正在从后端读取 topic 列表..." : "请先返回话题列表，或创建一个新的话题。"}
+          </p>
+          <div className="mt-6">
+            <Button onClick={() => navigate("/")} type="button" variant="primary">
+              返回话题列表
+            </Button>
+          </div>
         </Surface>
       </main>
     );
   }
 
   const materials = mockMaterialPreviewByTopicId[topicId] ?? [];
-  const candidatePosts = mockCandidatePostsByTopicId[topicId] ?? [];
   const imageGroups = mockImageTasksByTopicId[topicId] ?? [];
 
   return (
@@ -119,7 +336,7 @@ export function TopicWorkspacePage(): JSX.Element {
               ? "80px minmax(520px, 560px) 88px"
               : !isSidebarCollapsed && isContextOpen
                 ? "248px minmax(520px, 560px) minmax(560px, 1fr)"
-                : "248px minmax(520px, 560px) 88px"
+                : "248px minmax(520px, 560px) 88px",
       }}
       className="grid h-screen gap-4 pr-4 pl-0"
       data-left-sidebar={isSidebarCollapsed ? "collapsed" : "open"}
@@ -132,6 +349,7 @@ export function TopicWorkspacePage(): JSX.Element {
         collapsed={isSidebarCollapsed}
         currentTopicId={topicId}
         onToggleCollapse={() => setIsSidebarCollapsed((current) => !current)}
+        topics={topics}
       />
 
       <section
@@ -141,15 +359,42 @@ export function TopicWorkspacePage(): JSX.Element {
       >
         <div className="mx-auto flex w-full max-w-[720px] items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Topic Workspace</p>
-            <h1 className="mt-3 text-[31px] font-semibold tracking-[-0.03em] text-slate-950">{workspace.topic.title}</h1>
-            <p className="mt-2 max-w-2xl text-[13px] leading-6 text-slate-500">{workspace.topic.description}</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+              Topic Workspace
+            </p>
+            <h1 className="mt-3 text-[31px] font-semibold tracking-[-0.03em] text-slate-950">
+              {topic.title}
+            </h1>
+            <p className="mt-2 max-w-2xl text-[13px] leading-6 text-slate-500">
+              {topic.description || "当前话题还没有描述。"}
+            </p>
           </div>
-          <Badge variant="primary">{sectionsById.collector?.status === "loading" ? "搜集中" : "已就绪"}</Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="primary">
+              {sectionsById.collector?.status === "loading" ? "搜集中" : "已就绪"}
+            </Badge>
+            <Button
+              aria-label="删除当前话题"
+              disabled={isDeletingTopic}
+              onClick={() => void handleDeleteCurrentTopic()}
+              type="button"
+              variant="ghost"
+            >
+              <Trash2 className="h-4 w-4" strokeWidth={1.8} />
+            </Button>
+          </div>
         </div>
 
         <div className="scrollbar-subtle mt-6 flex-1 overflow-y-auto pr-2">
           <div className="mx-auto w-full max-w-[720px]">
+            {messagesError ? (
+              <Surface className="mb-4 border border-rose-200 bg-rose-50/80 p-4 text-sm text-rose-700">
+                {messagesError}
+              </Surface>
+            ) : null}
+            {isMessagesLoading && messages.length === 0 ? (
+              <Surface className="mb-4 p-4 text-sm text-slate-500">正在加载会话...</Surface>
+            ) : null}
             <AgentTimeline copyDraft={copyDraft} messages={messages} onCopyDraftChange={setCopyDraft} />
           </div>
         </div>
@@ -159,18 +404,26 @@ export function TopicWorkspacePage(): JSX.Element {
             <input
               aria-label="对话输入框"
               className="h-11 flex-1 border-0 bg-transparent px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+              disabled={isSending}
               onChange={(event) => setComposerValue(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  handleSend();
+                  void handleSend();
                 }
               }}
               placeholder="输入你想继续让 Agent 处理的内容..."
               type="text"
               value={composerValue}
             />
-            <Button aria-label="发送消息" onClick={handleSend} size="icon" type="button" variant="primary">
+            <Button
+              aria-label="发送消息"
+              disabled={isSending}
+              onClick={() => void handleSend()}
+              size="icon"
+              type="button"
+              variant="primary"
+            >
               <SendHorizontal className="h-4 w-4" strokeWidth={1.8} />
             </Button>
           </div>
@@ -187,7 +440,9 @@ export function TopicWorkspacePage(): JSX.Element {
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
             {isContextOpen ? (
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Current Workspace</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                  Current Workspace
+                </p>
                 <h2 className="mt-2 text-lg font-semibold text-slate-900">当前工作区</h2>
               </div>
             ) : (
@@ -201,7 +456,11 @@ export function TopicWorkspacePage(): JSX.Element {
               type="button"
               variant="ghost"
             >
-              {isContextOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              {isContextOpen ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
             </Button>
           </div>
 
@@ -220,10 +479,18 @@ export function TopicWorkspacePage(): JSX.Element {
                       {materials.map((material) => (
                         <article className="rounded-[18px] bg-slate-50 p-3" key={material.id}>
                           <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">
-                            {material.type === "image" ? "图片" : material.type === "text" ? "文本" : "链接"}
+                            {material.type === "image"
+                              ? "图片"
+                              : material.type === "text"
+                                ? "文本"
+                                : "链接"}
                           </p>
-                          <p className="mt-2 text-sm font-medium text-slate-900">{material.label}</p>
-                          <p className="mt-1 text-xs leading-5 text-slate-500">{material.detail}</p>
+                          <p className="mt-2 text-sm font-medium text-slate-900">
+                            {material.label}
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-slate-500">
+                            {material.detail}
+                          </p>
                         </article>
                       ))}
                     </div>
@@ -241,13 +508,34 @@ export function TopicWorkspacePage(): JSX.Element {
                 </ContextPanelGroup>
               ) : null}
 
+              {sectionsById.patternSummary ? (
+                <ContextPanelGroup
+                  expanded={expandedGroups.patternSummary}
+                  onToggle={() => toggleGroup("patternSummary")}
+                  section={sectionsById.patternSummary}
+                >
+                  {patternSummary ? (
+                    <PatternSummarySection
+                      content={patternSummary}
+                      section={sectionsById.patternSummary}
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-500">空状态</p>
+                  )}
+                </ContextPanelGroup>
+              ) : null}
+
               {sectionsById.copyDraft ? (
                 <ContextPanelGroup
                   expanded={expandedGroups.copyDraft}
                   onToggle={() => toggleGroup("copyDraft")}
                   section={sectionsById.copyDraft}
                 >
-                  {copyDraft ? <CopyDraftSummaryPanel copyDraft={copyDraft} /> : <p className="text-sm text-slate-500">空状态</p>}
+                  {copyDraft ? (
+                    <CopyDraftSummaryPanel copyDraft={copyDraft} />
+                  ) : (
+                    <p className="text-sm text-slate-500">空状态</p>
+                  )}
                 </ContextPanelGroup>
               ) : null}
 

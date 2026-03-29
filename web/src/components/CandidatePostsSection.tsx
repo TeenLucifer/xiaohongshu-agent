@@ -55,6 +55,7 @@ function moveItem(order: string[], postId: string, direction: "up" | "down"): st
 export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JSX.Element {
   const [selectedOrder, setSelectedOrder] = useState<string[]>(() => buildInitialOrder(posts));
   const [activePostId, setActivePostId] = useState<string | null>(null);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
     setSelectedOrder(buildInitialOrder(posts));
@@ -64,6 +65,20 @@ export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JS
     function handleKeyDown(event: KeyboardEvent): void {
       if (event.key === "Escape") {
         setActivePostId(null);
+        return;
+      }
+      if (activePostId === null) {
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        setActiveImageIndex((current) => Math.max(0, current - 1));
+      }
+      if (event.key === "ArrowRight") {
+        setActiveImageIndex((current) => {
+          const active = posts.find((post) => post.id === activePostId);
+          const total = active?.images.length ?? 0;
+          return total > 0 ? Math.min(total - 1, current + 1) : current;
+        });
       }
     }
 
@@ -76,10 +91,17 @@ export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JS
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
     };
-  }, [activePostId]);
+  }, [activePostId, posts]);
 
   const displayPosts = useMemo(() => sortPosts(posts, selectedOrder), [posts, selectedOrder]);
   const activePost = displayPosts.find((post) => post.id === activePostId) ?? null;
+  const activeImages = activePost?.images ?? [];
+  const currentImage = activeImages[activeImageIndex] ?? null;
+  const hasMultipleImages = activeImages.length > 1;
+
+  useEffect(() => {
+    setActiveImageIndex(0);
+  }, [activePostId]);
 
   function toggleSelected(postId: string): void {
     setSelectedOrder((current) => {
@@ -115,7 +137,10 @@ export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JS
                 selected ? "border-blue-200 bg-blue-50/70" : "border-slate-200"
               )}
               key={post.id}
-              onClick={() => setActivePostId(post.id)}
+              onClick={() => {
+                setActivePostId(post.id);
+                setActiveImageIndex(0);
+              }}
               type="button"
             >
               <img alt={`${post.title} 封面图`} className="aspect-[0.82] w-full object-cover" src={post.imageUrl} />
@@ -170,7 +195,56 @@ export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JS
               </div>
 
               <div className="mt-4 grid gap-5 md:grid-cols-[240px_minmax(0,1fr)]">
-                <img alt={`${activePost.title} 详情图`} className="w-full rounded-[22px] object-cover" src={activePost.imageUrl} />
+                <div>
+                  <img
+                    alt={currentImage?.alt ?? `${activePost.title} 详情图`}
+                    className="w-full rounded-[22px] object-cover"
+                    src={currentImage?.imageUrl ?? activePost.imageUrl}
+                  />
+                  {hasMultipleImages ? (
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <Button
+                        aria-label="上一张图片"
+                        disabled={activeImageIndex === 0}
+                        onClick={() => setActiveImageIndex((current) => Math.max(0, current - 1))}
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      >
+                        上一张
+                      </Button>
+                      <div
+                        aria-label="图片位置指示"
+                        className="flex items-center gap-1.5"
+                      >
+                        {activeImages.map((image, index) => (
+                          <button
+                            aria-label={`切换到第 ${index + 1} 张图片`}
+                            className={cn(
+                              "h-2.5 w-2.5 rounded-full transition-colors duration-200",
+                              index === activeImageIndex ? "bg-slate-900" : "bg-slate-300"
+                            )}
+                            key={image.id}
+                            onClick={() => setActiveImageIndex(index)}
+                            type="button"
+                          />
+                        ))}
+                      </div>
+                      <Button
+                        aria-label="下一张图片"
+                        disabled={activeImageIndex === activeImages.length - 1}
+                        onClick={() =>
+                          setActiveImageIndex((current) => Math.min(activeImages.length - 1, current + 1))
+                        }
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      >
+                        下一张
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
                 <div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
                     <span>作者：{activePost.author}</span>

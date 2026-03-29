@@ -1,0 +1,211 @@
+import type { CandidatePost, ChatMessage, PatternSummaryContent, TopicCard } from "../types/workspace";
+
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+
+export interface ApiChatMessage {
+  id: string;
+  role: "user" | "agent";
+  text: string;
+  time: string;
+  agent_name?: string | null;
+}
+
+export interface ApiLastRun {
+  final_text: string;
+  tool_calls: Array<{
+    name: string;
+    arguments_summary: string;
+    result_summary: string;
+  }>;
+  artifacts: string[];
+}
+
+export interface WorkspaceApiResponse {
+  topic_id: string;
+  topic_title: string;
+  session_id: string;
+  messages: ApiChatMessage[];
+  updated_at: string;
+  last_run?: ApiLastRun | null;
+}
+
+export interface RunApiResponse extends WorkspaceApiResponse {
+  last_run: ApiLastRun;
+}
+
+export interface MessagesApiResponse {
+  topic_id: string;
+  topic_title: string;
+  session_id: string;
+  messages: ApiChatMessage[];
+  updated_at: string;
+}
+
+export interface WorkspaceContextApiResponse {
+  topic_id: string;
+  topic_title: string;
+  candidate_posts: CandidatePost[];
+  pattern_summary: PatternSummaryContent | null;
+  updated_at: string;
+}
+
+export interface TopicListItemApiResponse {
+  topic_id: string;
+  title: string;
+  description: string;
+  session_id: string;
+  updated_at: string;
+}
+
+export interface TopicListApiResponse {
+  items: TopicListItemApiResponse[];
+}
+
+export interface CreateTopicApiResponse {
+  topic_id: string;
+  title: string;
+  description: string;
+  session_id: string;
+  updated_at: string;
+}
+
+export interface DeleteTopicApiResponse {
+  deleted_topic_id: string;
+}
+
+interface ErrorApiResponse {
+  error_code: string;
+  message: string;
+  details?: Record<string, unknown>;
+}
+
+function getApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_BASE_URL?.trim();
+  return configured && configured.length > 0 ? configured : DEFAULT_API_BASE_URL;
+}
+
+function toAbsoluteApiUrl(url: string): string {
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+    return url;
+  }
+  if (!url.startsWith("/")) {
+    return url;
+  }
+  return `${getApiBaseUrl()}${url}`;
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers ?? {})
+    },
+    ...init
+  });
+
+  if (!response.ok) {
+    let message = "请求失败";
+    try {
+      const payload = (await response.json()) as ErrorApiResponse;
+      message = payload.message || message;
+    } catch {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
+  }
+
+  return (await response.json()) as T;
+}
+
+export function toChatMessages(messages: ApiChatMessage[]): ChatMessage[] {
+  return messages.map((message) => ({
+    id: message.id,
+    role: message.role,
+    text: message.text,
+    time: message.time,
+    agentName: message.agent_name ?? undefined
+  }));
+}
+
+export function toTopicCards(items: TopicListItemApiResponse[]): TopicCard[] {
+  return items.map((item) => ({
+    id: item.topic_id,
+    title: item.title,
+    description: item.description ?? "",
+    updatedAt: item.updated_at,
+  }));
+}
+
+export async function listTopics(): Promise<TopicListApiResponse> {
+  return requestJson<TopicListApiResponse>("/api/topics");
+}
+
+export async function createTopic(title: string, description = ""): Promise<CreateTopicApiResponse> {
+  return requestJson<CreateTopicApiResponse>("/api/topics", {
+    method: "POST",
+    body: JSON.stringify({
+      title,
+      description,
+    }),
+  });
+}
+
+export async function deleteTopic(topicId: string): Promise<DeleteTopicApiResponse> {
+  return requestJson<DeleteTopicApiResponse>(`/api/topics/${topicId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getWorkspace(topicId: string, topicTitle: string): Promise<WorkspaceApiResponse> {
+  const params = new URLSearchParams({ topic_title: topicTitle });
+  return requestJson<WorkspaceApiResponse>(`/api/topics/${topicId}/workspace?${params.toString()}`);
+}
+
+export async function runTopic(
+  topicId: string,
+  topicTitle: string,
+  userInput: string
+): Promise<RunApiResponse> {
+  return requestJson<RunApiResponse>(`/api/topics/${topicId}/runs`, {
+    method: "POST",
+    body: JSON.stringify({
+      topic_title: topicTitle,
+      user_input: userInput
+    })
+  });
+}
+
+export async function getMessages(topicId: string, topicTitle: string): Promise<MessagesApiResponse> {
+  const params = new URLSearchParams({ topic_title: topicTitle });
+  return requestJson<MessagesApiResponse>(`/api/topics/${topicId}/messages?${params.toString()}`);
+}
+
+export async function getWorkspaceContext(
+  topicId: string,
+  topicTitle: string
+): Promise<WorkspaceContextApiResponse> {
+  const params = new URLSearchParams({ topic_title: topicTitle });
+  const response = await requestJson<WorkspaceContextApiResponse>(
+    `/api/topics/${topicId}/context?${params.toString()}`
+  );
+  return {
+    ...response,
+    candidate_posts: response.candidate_posts.map((post) => ({
+      ...post,
+      imageUrl: toAbsoluteApiUrl(post.imageUrl),
+      images: (post.images ?? []).map((image) => ({
+        ...image,
+        imageUrl: toAbsoluteApiUrl(image.imageUrl)
+      }))
+    }))
+  };
+}
+
+export async function resetTopic(topicId: string, topicTitle: string): Promise<WorkspaceApiResponse> {
+  return requestJson<WorkspaceApiResponse>(`/api/topics/${topicId}/reset`, {
+    method: "POST",
+    body: JSON.stringify({
+      topic_title: topicTitle
+    })
+  });
+}
