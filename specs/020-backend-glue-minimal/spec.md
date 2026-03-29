@@ -8,7 +8,7 @@
 
 - 提供一个基于 FastAPI 的单进程 Python 后端服务
 - 服务启动时长期持有一个 `AgentRuntime`
-- 固定 `topic_id -> active_session_id` 的最小映射规则
+- 固定 `topic_id -> session_id` 的最小映射规则
 - 为前端主栏对话提供同步 API
 - 固定后端薄 DTO 边界
 - 固定最小错误返回结构
@@ -62,7 +62,7 @@
 - 前端按 `topic_id` 调后端，不按 `topic` 文本或 `session_id` 调 runtime
 - 一个 `topic_id` 第一版只绑定一个当前活跃 `session_id`
 - 后端必须维护文件化映射：
-  - `topic_id -> active_session_id`
+  - `topic_id -> session_id`
 - 首次访问某个 `topic_id` 时：
   - 若无映射，则创建新 session
   - `topic_title` 由前端每次请求显式传入
@@ -90,8 +90,7 @@
 
 - 读取某个 `topic_id` 当前活跃 `session_id`
 - 首次访问时创建映射
-- 更新映射文件
-- 读取 topic 基本元信息
+- 更新全局索引文件
 
 不负责：
 
@@ -117,16 +116,28 @@
 ## 映射存储
 
 - 映射采用文件化持久化
-- 建议目录规则：
-  - `data/topics/<topic_id>/session.json`
-- 文件至少保存：
-- `topic_id`
-- `active_session_id`
-- `topic_title`
-- `updated_at`
+- 索引文件固定为：
+  - `data/topic-index.json`
+- 该文件至少保存：
+  - `topic_id`
+  - `session_id`
+  - `updated_at`
+- `topic_title` 不再作为映射文件主字段保存，topic 标题以对应 session 目录中的 `topic.json` 为准
 - 映射读取失败时：
   - 记录日志
   - 允许按“无映射”处理并重新创建
+
+## Session 目录真相
+
+- 当前 active session 的完整工作目录位于：
+  - `data/sessions/<session_id>/`
+- 目录内至少包含：
+  - `topic.json`
+  - `session.jsonl`
+  - `workspace/`
+  - `memory/`
+  - `logs/`
+- 后端通过 `topic-index.json` 找到 `session_id` 后，再从该 session 目录读取 topic 元信息与 workspace 数据
 
 ## HTTP API
 

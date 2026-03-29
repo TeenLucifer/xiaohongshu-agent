@@ -2,7 +2,7 @@
 
 ## 背景
 
-当前前端工作台按 `topic_id` 路由，但 topic 列表、创建话题和删除话题仍然依赖前端 mock。`020-backend-glue-minimal` 已经建立了 `topic_id -> active_session_id` 的最小映射，也证明前端产品主键与 runtime 执行主键应保持分离。下一步需要把 topic 本身收成正式后端能力。
+当前前端工作台按 `topic_id` 路由，但 topic 列表、创建话题和删除话题仍然依赖前端 mock。`020-backend-glue-minimal` 已经建立了 `topic_id -> session_id` 的最小映射，也证明前端产品主键与 runtime 执行主键应保持分离。下一步需要把 topic 本身收成正式后端能力。
 
 ## 目标
 
@@ -47,16 +47,14 @@
 - 创建 topic 时必须立即创建对应 active session，不采用懒创建
 - `topic_id` 格式固定为：
   - `topic_` + ULID
-- topic 元数据采用每 topic 一个 meta 文件
-- topic 元数据目录固定为：
-  - `data/topics/<topic_id>/topic.json`
-- active session 映射文件继续位于：
-  - `data/topics/<topic_id>/session.json`
+- topic 元数据固定写入对应 session 目录中的：
+  - `data/sessions/<session_id>/topic.json`
+- active session 映射采用全局单文件：
+  - `data/topic-index.json`
 - topic 列表默认按 `updated_at` 倒序返回
 - 删除 topic 采用硬删除
 - 删除 topic 时必须同步删除：
-  - `topic.json`
-  - `session.json`
+  - `data/topic-index.json` 中的映射项
   - 当前 active session 目录
 - 删除后若仍有其它 topic：
   - 前端跳转到剩余列表中的第一个 topic
@@ -76,14 +74,13 @@
 ### Topic Session Mapping
 
 - `topic_id`
-- `active_session_id`
-- `topic_title`
+- `session_id`
 - `updated_at`
 
 说明：
 
-- `topic_title` 是当前 topic 的展示标题快照
-- `session.json` 只承担 `topic_id -> active_session_id` 关系，不承担 topic 元数据主文件职责
+- `data/topic-index.json` 只承担 `topic_id -> session_id` 的轻量索引关系
+- topic 标题与描述不再保存在索引中，而以 session 目录内的 `topic.json` 为准
 
 ## 内部组件
 
@@ -91,9 +88,9 @@
 
 职责：
 
-- 读写 `topic.json`
-- 列出全部 topic 元数据
-- 删除 topic 元数据目录
+- 读写 `data/sessions/<session_id>/topic.json`
+- 基于索引列出全部 topic 元数据
+- 删除 session 目录中的 topic 元数据文件
 
 不负责：
 
@@ -105,7 +102,8 @@
 
 职责：
 
-- 读写 `topic_id -> active_session_id` 映射
+- 读写 `data/topic-index.json`
+- 管理 `topic_id -> session_id` 映射
 - 返回当前 topic 的 active session
 
 不负责：
@@ -119,7 +117,7 @@
 
 - 创建 topic 时生成 `topic_id`
 - 调用 runtime 立即创建 session
-- 同时写入 `topic.json` 与 `session.json`
+- 同时写入 `data/topic-index.json` 与 `data/sessions/<session_id>/topic.json`
 - 删除 topic 时协调 topic 元数据、映射与 session 目录的硬删除
 - 组装 topic 相关 DTO
 
@@ -157,8 +155,8 @@
 
 - 生成 `topic_id`
 - 立即创建 active session
-- 写入 `topic.json`
-- 写入 `session.json`
+- 写入 `data/sessions/<session_id>/topic.json`
+- 写入 `data/topic-index.json`
 
 返回：
 

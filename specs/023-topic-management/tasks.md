@@ -12,7 +12,7 @@
 - [x] 固定一个 `topic_id` 第一版只绑定一个当前 active session。
 - [x] 固定创建 topic 时立即创建 active session。
 - [x] 固定 `topic_id` 格式为 `topic_` + ULID。
-- [x] 固定 topic 元数据采用每 topic 一个 `topic.json`。
+- [x] 固定 topic 元数据写入对应 session 目录中的 `topic.json`。
 - [x] 固定 topic 删除采用硬删除。
 - [x] 固定删除后若仍有剩余 topic，前端跳转到剩余列表中的第一个。
 
@@ -23,7 +23,7 @@
 - [x] 在后端实现 `POST /api/topics`。
 - [x] 在后端实现 `DELETE /api/topics/{topic_id}`。
 - [x] 为创建逻辑接入 runtime 的立即建 session 行为。
-- [x] 实现 `topic.json` 与 `session.json` 的联合落盘。
+- [x] 实现 `data/topic-index.json` 与 session 目录内 `topic.json` 的联合落盘。
 - [x] 实现删除 topic 时的硬删除协同逻辑。
 - [x] 实现 topic 列表按 `updated_at` 倒序返回。
 - [x] 定义 topic 相关薄 DTO 与错误 DTO。

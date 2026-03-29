@@ -177,7 +177,7 @@ def create_app(
         if record is None:
             raise HTTPException(status_code=404, detail="topic mapping not found")
         workspace_root = request.app.state.session_workspace_store.get_workspace_root(
-            record.active_session_id
+            record.session_id
         ).resolve()
         candidate = (workspace_root / asset_path).resolve()
         if workspace_root not in candidate.parents and candidate != workspace_root:

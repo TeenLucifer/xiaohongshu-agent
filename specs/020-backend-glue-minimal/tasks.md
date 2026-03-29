@@ -9,7 +9,7 @@
 - [x] 固定前端按 `topic_id` 调后端，不直接按 `session_id` 调 runtime。
 - [x] 固定一个 `topic_id` 默认绑定一个当前活跃 `session_id`。
 - [x] 固定后端为基于 FastAPI 的单进程 Python 服务，并长期持有一个 `AgentRuntime`。
-- [x] 固定 `topic_id -> active_session_id` 采用文件化映射。
+- [x] 固定 `topic_id -> session_id` 采用文件化映射，并收口到 `data/topic-index.json`。
 - [x] 固定第一版 `run` 为同步执行，不做流式、不做完整 topic 真相层。
 - [x] 固定第一版只服务主栏对话，并通过 4 个最小接口暴露能力。
 - [x] 固定 `topic_title` 由前端每次请求显式传入。
@@ -31,4 +31,4 @@
 ## 备注
 
 - 详细边界与验收要求以下列文档为准：`spec.md`、`acceptance.md`
-- 若组合 `021` 的右侧读取能力，底层应读取当前 active session 的 workspace 数据，而不是独立的 topic 目录。
+- 若组合 `021` 的右侧读取能力，底层应读取当前 active session 的 `data/sessions/<session_id>/workspace/` 数据，而不是独立的 topic 目录。

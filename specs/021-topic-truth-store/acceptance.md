@@ -5,38 +5,40 @@
 1. 为一个新的 `topic_id` 创建当前 active session
 2. 确认目录结构符合约定
 3. 确认 workspace 数据目录位于该 session 下
-4. 写入 workspace 元数据
-5. 确认 `meta.json` 可正常读取
-6. 写入候选帖子列表
-7. 确认 `candidate_posts` 对象可独立读取
-8. 写入已选帖子列表
-9. 确认 `selected_posts` 对象可独立读取
-10. 写入单篇帖子 `post.json`、`raw.json` 与资源文件
-11. 确认帖子 detail/raw/assets 可独立读取
-12. 确认候选帖子对象可稳定引用帖子详情与资源
-13. 写入模式总结
-14. 确认总结对象可独立读取
-15. 写入文案对象
-16. 确认文案对象可独立读取
-17. 写入图片结果对象
-18. 确认图片结果可独立读取
-19. 修改其中一个对象
-20. 确认不会破坏同 session 下其它 workspace 文件
-21. 新增右侧 `context` 读取接口
-22. 将同一 `topic_id` 关联到 `020` 的工作区服务层
-23. 确认后端先 resolve 当前 active session，再读取该 session 的 workspace 数据
-24. 确认 `candidatePosts` 可返回真实候选帖子与详情字段
-25. 对于多图帖子，确认 `candidatePosts` 详情可返回完整图片数组
-26. 对于单图帖子，确认 `candidatePosts` 详情仍可正常回退到单图展示
-27. 确认 `patternSummary` 可返回真实总结字段
-28. 确认右侧其它 section 仍然继续使用 mock
-29. 调用 `POST /reset`
-30. 确认主栏消息与右侧 workspace 数据一起清空
-31. 确认 session workspace 数据可被后续右侧 workspace 消费
+4. 确认 `data/sessions/<session_id>/topic.json` 存在且可读取
+5. 写入 workspace 元数据
+6. 确认 `meta.json` 可正常读取
+7. 写入候选帖子列表
+8. 确认 `candidate_posts` 对象可独立读取
+9. 写入已选帖子列表
+10. 确认 `selected_posts` 对象可独立读取
+11. 写入单篇帖子 `post.json`、`raw.json` 与资源文件
+12. 确认帖子 detail/raw/assets 可独立读取
+13. 确认候选帖子对象可稳定引用帖子详情与资源
+14. 写入模式总结
+15. 确认总结对象可独立读取
+16. 写入文案对象
+17. 确认文案对象可独立读取
+18. 写入图片结果对象
+19. 确认图片结果可独立读取
+20. 修改其中一个对象
+21. 确认不会破坏同 session 下其它 workspace 文件
+22. 新增右侧 `context` 读取接口
+23. 将同一 `topic_id` 关联到 `020` 的工作区服务层
+24. 确认后端先通过 `data/topic-index.json` resolve 当前 active session，再读取该 session 的 workspace 数据
+25. 确认 `candidatePosts` 可返回真实候选帖子与详情字段
+26. 对于多图帖子，确认 `candidatePosts` 详情可返回完整图片数组
+27. 对于单图帖子，确认 `candidatePosts` 详情仍可正常回退到单图展示
+28. 确认 `patternSummary` 可返回真实总结字段
+29. 确认右侧其它 section 仍然继续使用 mock
+30. 调用 `POST /reset`
+31. 确认主栏消息与右侧 workspace 数据一起清空
+32. 确认 session workspace 数据可被后续右侧 workspace 消费
 
 ## 自动化验收
 
 - active session 下的 workspace 目录初始化测试通过
+- session 目录内 `topic.json` 读取测试通过
 - workspace 元数据读写测试通过
 - 候选帖子读写测试通过
 - 已选帖子读写测试通过
@@ -64,4 +66,3 @@
 - 当前不定义帖子读取/下载执行流程
 - 第一波右侧真实化不包含写回交互
 - 第一波右侧真实化不包含 `copyDraft`、`imageResults`、`materials`、`collector`
-- 当前实现仍可能保留旧的 `data/topics/<topic_id>/` 结构，需后续迁移到 session 目录

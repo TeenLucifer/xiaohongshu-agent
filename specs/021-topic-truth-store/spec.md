@@ -42,9 +42,10 @@
 
 ## 约束
 
-- `020` 继续以 `topic_id -> active_session_id` 作为前端入口映射
+- `020` 继续以 `data/topic-index.json` 中的 `topic_id -> session_id` 作为前端入口映射
 - `021` 的数据根目录跟随当前 active session，位于 `data/sessions/<session_id>/workspace/`
 - workspace 数据层不再独立落在 `data/topics/<topic_id>/`
+- 当前 session 目录中的 `topic.json` 保存该 workspace 所属 topic 的标题与描述
 - workspace 数据层与 session 历史/记忆分层：
   - session 历史、memory 继续归 `011/012`
   - session workspace 对象归 `021`
@@ -94,6 +95,11 @@
 - `title`
 - 可选 `description`
 - `updated_at`
+
+说明：
+
+- `Topic Meta` 保存于 `data/sessions/<session_id>/topic.json`
+- 不再单独放在 `data/topics/<topic_id>/`
 
 ### Candidate Posts
 

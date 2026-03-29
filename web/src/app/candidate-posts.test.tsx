@@ -13,6 +13,7 @@ async function renderWorkspace(): Promise<ReturnType<typeof render>> {
     </MemoryRouter>
   );
   await screen.findByRole("complementary", { name: "当前工作区" });
+  await screen.findByRole("button", { name: /春日通勤西装 3 套搭法/ });
   return view;
 }
 

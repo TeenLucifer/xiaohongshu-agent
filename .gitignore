@@ -20,4 +20,4 @@ playwright-report/
 *.tsbuildinfo
 功能.md
 
-data/sessions/
+data/

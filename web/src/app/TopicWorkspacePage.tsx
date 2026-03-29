@@ -22,12 +22,10 @@ import {
   toTopicCards,
 } from "../lib/api";
 import {
-  mockCandidatePostsByTopicId,
   mockChatMessagesByTopicId,
   mockCopyDraftByTopicId,
   mockImageTasksByTopicId,
   mockMaterialPreviewByTopicId,
-  mockPatternSummaryByTopicId,
 } from "../data/mockTopics";
 import type {
   CandidatePost,
@@ -174,8 +172,9 @@ export function TopicWorkspacePage(): JSX.Element {
     setComposerValue("");
     setMessages([]);
     setCopyDraft(mockCopyDraftByTopicId[topicId]);
-    setCandidatePosts(mockCandidatePostsByTopicId[topicId] ?? []);
-    setPatternSummary(mockPatternSummaryByTopicId[topicId]);
+    // candidatePosts / patternSummary 已接真实后端，不再先注入 mock，避免切换 topic 时闪现旧假数据。
+    setCandidatePosts([]);
+    setPatternSummary(undefined);
     setIsSidebarCollapsed(false);
   }, [topicId]);
 
@@ -221,13 +220,13 @@ export function TopicWorkspacePage(): JSX.Element {
       .then((response) => {
         if (!cancelled) {
           setCandidatePosts(response.candidate_posts);
-          setPatternSummary(response.pattern_summary ?? mockPatternSummaryByTopicId[topicId]);
+          setPatternSummary(response.pattern_summary ?? undefined);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setCandidatePosts(mockCandidatePostsByTopicId[topicId] ?? []);
-          setPatternSummary(mockPatternSummaryByTopicId[topicId]);
+          setCandidatePosts([]);
+          setPatternSummary(undefined);
         }
       });
 

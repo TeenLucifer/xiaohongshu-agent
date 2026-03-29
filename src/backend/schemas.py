@@ -15,8 +15,7 @@ class TopicSessionRecord(BaseModel):
     """File-backed topic/session mapping record."""
 
     topic_id: str
-    active_session_id: str
-    topic_title: str
+    session_id: str
     updated_at: datetime
 
 

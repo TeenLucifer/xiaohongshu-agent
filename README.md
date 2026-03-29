@@ -35,7 +35,7 @@
 - loop、tools、skills loader、local harness
 - 本地 trace 联调能力
 - FastAPI 最小后端胶水层
-- `topic_id -> active_session_id` 文件映射
+- `data/topic-index.json` 话题到 session 的轻量映射
 - 前端主栏与后端真实 API 打通
 - session workspace 数据层
 - topic 列表、创建、删除与真实路由
@@ -68,8 +68,8 @@
 
 当前后端已经采用“纯文件化”作为主要真相层：
 
-- topic 元数据与 active session 映射落在 `data/topics/`
-- session 历史、memory 与 workspace 数据落在 `data/sessions/`
+- `data/topic-index.json` 保存 `topic_id -> session_id` 轻量索引
+- topic 元数据、session 历史、memory 与 workspace 数据落在 `data/sessions/<session_id>/`
 - 目录下按对象拆分小文件
 
 ## 技术方向
@@ -196,6 +196,7 @@ curl -X POST "http://127.0.0.1:8000/api/topics/topic-demo/runs" \
 - [ ] 提示词调优，路径约束单独一部分，角色定义
 - [ ] 真实 xhs 任务与 agent 联调：发散搜索、帖子阅读、帖子下载
 - [ ] 右侧其余 workspace section 继续去 mock 化
+- [ ] 支持 md 格式展示
 
 ## 说明
 

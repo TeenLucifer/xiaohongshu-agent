@@ -105,7 +105,7 @@
 ### 后端与集成
 
 - `020-backend-glue-minimal`
-  - 最小后端胶水层、`topic_id -> active_session_id` 映射与同步主栏 API
+  - 最小后端胶水层、`data/topic-index.json` 映射与同步主栏 API
 - `021-topic-truth-store`
   - session workspace 数据层、候选帖子/总结/文案/图片等右侧工作区对象存储
 - `022-streaming-run-api`

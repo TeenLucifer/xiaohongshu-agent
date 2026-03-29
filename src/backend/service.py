@@ -72,34 +72,27 @@ class BackendAppService:
         self._workspace_store = workspace_store or SessionWorkspaceStore(runtime.data_root)
 
     def list_topics(self) -> TopicListResponse:
-        meta_records = {record.topic_id: record for record in self._topic_meta_store.list()}
-        mapping_records = {record.topic_id: record for record in self._topic_store.list()}
-        for topic_id, mapping in mapping_records.items():
-            if topic_id in meta_records:
-                continue
-            meta_records[topic_id] = TopicMetaRecord(
-                topic_id=topic_id,
-                title=mapping.topic_title,
-                description="",
-                created_at=mapping.updated_at,
-                updated_at=mapping.updated_at,
+        items: list[TopicListItemResponse] = []
+        for mapping in self._topic_store.list():
+            meta = self._topic_meta_store.get(mapping.session_id)
+            if meta is None:
+                meta = TopicMetaRecord(
+                    topic_id=mapping.topic_id,
+                    title=mapping.topic_id,
+                    description="",
+                    created_at=mapping.updated_at,
+                    updated_at=mapping.updated_at,
+                )
+            items.append(
+                TopicListItemResponse(
+                    topic_id=meta.topic_id,
+                    title=meta.title,
+                    description=meta.description,
+                    session_id=mapping.session_id,
+                    updated_at=max(meta.updated_at, mapping.updated_at),
+                )
             )
-
-        items = [
-            TopicListItemResponse(
-                topic_id=record.topic_id,
-                title=record.title,
-                description=record.description,
-                session_id=mapping_records[record.topic_id].active_session_id,
-                updated_at=record.updated_at,
-            )
-            for record in sorted(
-                meta_records.values(),
-                key=lambda item: item.updated_at,
-                reverse=True,
-            )
-            if record.topic_id in mapping_records
-        ]
+        items.sort(key=lambda item: item.updated_at, reverse=True)
         return TopicListResponse(items=items)
 
     def create_topic(self, *, title: str, description: str = "") -> CreateTopicResponse:
@@ -110,12 +103,12 @@ class BackendAppService:
         )
         mapping = TopicSessionRecord(
             topic_id=topic_id,
-            active_session_id=snapshot.session_id,
-            topic_title=title,
+            session_id=snapshot.session_id,
             updated_at=snapshot.updated_at,
         )
         self._topic_store.save(mapping)
         self._topic_meta_store.save(
+            snapshot.session_id,
             TopicMetaRecord(
                 topic_id=topic_id,
                 title=title,
@@ -134,31 +127,28 @@ class BackendAppService:
 
     def delete_topic(self, *, topic_id: str) -> DeleteTopicResponse:
         mapping = self._topic_store.get(topic_id)
-        meta = self._topic_meta_store.get(topic_id)
-        if mapping is None and meta is None:
+        if mapping is None:
             raise BackendApiError(
                 error_code="topic_not_found",
                 message="未找到对应话题。",
                 status_code=404,
             )
 
-        if mapping is not None:
-            self._runtime.session_manager.invalidate(mapping.active_session_id)
-            shutil.rmtree(
-                self._runtime.data_root / "sessions" / mapping.active_session_id,
-                ignore_errors=True,
-            )
+        self._runtime.session_manager.invalidate(mapping.session_id)
+        shutil.rmtree(
+            self._runtime.data_root / "sessions" / mapping.session_id,
+            ignore_errors=True,
+        )
 
         self._topic_store.delete(topic_id)
-        self._topic_meta_store.delete(topic_id)
         return DeleteTopicResponse(deleted_topic_id=topic_id)
 
     def get_workspace(self, *, topic_id: str, topic_title: str) -> WorkspaceResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
         return WorkspaceResponse(
             topic_id=record.topic_id,
-            topic_title=record.topic_title,
-            session_id=record.active_session_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            session_id=record.session_id,
             messages=self._build_messages(session),
             updated_at=record.updated_at,
             last_run=None,
@@ -196,8 +186,8 @@ class BackendAppService:
         self._sync_topic_meta(record, description=None)
         return RunResponse(
             topic_id=record.topic_id,
-            topic_title=record.topic_title,
-            session_id=record.active_session_id,
+            topic_title=self._current_topic_title(fresh_session, fallback=topic_title),
+            session_id=record.session_id,
             messages=self._build_messages(fresh_session),
             last_run=LastRunResponse(
                 final_text=result.final_text,
@@ -211,8 +201,8 @@ class BackendAppService:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
         return MessagesResponse(
             topic_id=record.topic_id,
-            topic_title=record.topic_title,
-            session_id=record.active_session_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            session_id=record.session_id,
             messages=self._build_messages(session),
             updated_at=record.updated_at,
         )
@@ -245,7 +235,7 @@ class BackendAppService:
 
         return WorkspaceContextResponse(
             topic_id=record.topic_id,
-            topic_title=record.topic_title,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
             candidate_posts=candidate_posts,
             pattern_summary=(
                 PatternSummaryContentResponse.from_record(pattern_summary)
@@ -264,7 +254,7 @@ class BackendAppService:
         self._sync_topic_meta(record, description=None)
         return ResetResponse(
             topic_id=record.topic_id,
-            topic_title=record.topic_title,
+            topic_title=self._current_topic_title(snapshot, fallback=topic_title),
             session_id=snapshot.session_id,
             messages=[],
             updated_at=record.updated_at,
@@ -284,13 +274,13 @@ class BackendAppService:
             )
             record = TopicSessionRecord(
                 topic_id=topic_id,
-                active_session_id=snapshot.session_id,
-                topic_title=topic_title,
+                session_id=snapshot.session_id,
                 updated_at=snapshot.updated_at,
             )
             self._topic_store.save(record)
-            if self._topic_meta_store.get(topic_id) is None:
+            if self._topic_meta_store.get(snapshot.session_id) is None:
                 self._topic_meta_store.save(
+                    snapshot.session_id,
                     TopicMetaRecord(
                         topic_id=topic_id,
                         title=topic_title,
@@ -298,31 +288,25 @@ class BackendAppService:
                         created_at=snapshot.updated_at,
                         updated_at=snapshot.updated_at,
                     )
-                )
+            )
             return record, self._runtime.session_manager.require(snapshot.session_id)
 
-        updated = False
-        if record.topic_title != topic_title:
-            record.topic_title = topic_title
-            updated = True
-
         try:
-            session = self._runtime.session_manager.require(record.active_session_id)
+            session = self._runtime.session_manager.require(record.session_id)
         except Exception:
             snapshot = self._runtime.create_session(
                 topic=topic_title,
                 metadata={"topic_id": topic_id},
             )
-            record.active_session_id = snapshot.session_id
+            record.session_id = snapshot.session_id
             record.updated_at = snapshot.updated_at
             self._topic_store.save(record)
             self._sync_topic_meta(record, description=None)
             return record, self._runtime.session_manager.require(snapshot.session_id)
 
-        if updated:
-            if session.topic != topic_title:
-                session.topic = topic_title
-                self._runtime.session_manager.save(session)
+        if session.topic != topic_title:
+            session.topic = topic_title
+            self._runtime.session_manager.save(session)
             record.updated_at = session.updated_at
             self._topic_store.save(record)
             self._sync_topic_meta(record, description=None)
@@ -334,11 +318,13 @@ class BackendAppService:
         *,
         description: str | None,
     ) -> None:
-        existing = self._topic_meta_store.get(record.topic_id)
+        session = self._runtime.session_manager.require(record.session_id)
+        existing = self._topic_meta_store.get(record.session_id)
         self._topic_meta_store.save(
+            record.session_id,
             TopicMetaRecord(
                 topic_id=record.topic_id,
-                title=record.topic_title,
+                title=self._current_topic_title(session, fallback=record.topic_id),
                 description=(
                     existing.description
                     if existing is not None and description is None
@@ -348,6 +334,11 @@ class BackendAppService:
                 updated_at=record.updated_at,
             )
         )
+
+    @staticmethod
+    def _current_topic_title(session: Any, *, fallback: str) -> str:
+        topic = getattr(session, "topic", None)
+        return topic or fallback
 
     def _build_messages(self, session: Session) -> list[MessageResponse]:
         messages: list[MessageResponse] = []

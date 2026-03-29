@@ -62,13 +62,18 @@ def test_create_topic_generates_topic_id_and_persists_files(tmp_path: Path) -> N
     assert len(payload["topic_id"]) == 32
     assert payload["session_id"]
 
-    topic_root = tmp_path / "data" / "topics" / payload["topic_id"]
-    topic_meta = json.loads((topic_root / "topic.json").read_text(encoding="utf-8"))
-    topic_session = json.loads((topic_root / "session.json").read_text(encoding="utf-8"))
+    topic_index = json.loads(
+        (tmp_path / "data" / "topic-index.json").read_text(encoding="utf-8")
+    )
+    topic_meta = json.loads(
+        (tmp_path / "data" / "sessions" / payload["session_id"] / "topic.json").read_text(
+            encoding="utf-8"
+        )
+    )
 
     assert topic_meta["title"] == "新的话题"
     assert topic_meta["description"] == "测试描述"
-    assert topic_session["active_session_id"] == payload["session_id"]
+    assert topic_index[payload["topic_id"]]["session_id"] == payload["session_id"]
     assert (tmp_path / "data" / "sessions" / payload["session_id"]).exists()
 
 
@@ -107,7 +112,10 @@ def test_delete_topic_hard_deletes_topic_and_session(tmp_path: Path) -> None:
 
     created, deleted = asyncio.run(run())
     assert deleted["deleted_topic_id"] == created["topic_id"]
-    assert not (tmp_path / "data" / "topics" / created["topic_id"]).exists()
+    topic_index_path = tmp_path / "data" / "topic-index.json"
+    if topic_index_path.exists():
+        payload = json.loads(topic_index_path.read_text(encoding="utf-8"))
+        assert created["topic_id"] not in payload
     assert not (tmp_path / "data" / "sessions" / created["session_id"]).exists()
 
 

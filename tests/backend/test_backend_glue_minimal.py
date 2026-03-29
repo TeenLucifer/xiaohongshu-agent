@@ -151,11 +151,14 @@ def test_workspace_first_access_creates_session_and_mapping(tmp_path: Path) -> N
 
     payload = asyncio.run(run())
 
-    mapping_path = tmp_path / "data" / "topics" / "topic-1" / "session.json"
+    mapping_path = tmp_path / "data" / "topic-index.json"
     mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
-    assert mapping["topic_id"] == "topic-1"
-    assert mapping["topic_title"] == "话题一"
-    assert mapping["active_session_id"] == payload["session_id"]
+    assert mapping["topic-1"]["session_id"] == payload["session_id"]
+    session_id = cast(str, payload["session_id"])
+    topic_meta_path = tmp_path / "data" / "sessions" / session_id / "topic.json"
+    topic_meta = json.loads(topic_meta_path.read_text(encoding="utf-8"))
+    assert topic_meta["topic_id"] == "topic-1"
+    assert topic_meta["title"] == "话题一"
 
 
 def test_workspace_reuses_active_session_and_updates_title(tmp_path: Path) -> None:
@@ -180,9 +183,10 @@ def test_workspace_reuses_active_session_and_updates_title(tmp_path: Path) -> No
     assert first["session_id"] == second["session_id"]
     assert second["topic_title"] == "新标题"
 
-    mapping_path = tmp_path / "data" / "topics" / "topic-1" / "session.json"
-    mapping = json.loads(mapping_path.read_text(encoding="utf-8"))
-    assert mapping["topic_title"] == "新标题"
+    session_id = cast(str, second["session_id"])
+    topic_meta_path = tmp_path / "data" / "sessions" / session_id / "topic.json"
+    topic_meta = json.loads(topic_meta_path.read_text(encoding="utf-8"))
+    assert topic_meta["title"] == "新标题"
 
 
 def test_run_returns_messages_and_filters_tool_messages(tmp_path: Path) -> None:

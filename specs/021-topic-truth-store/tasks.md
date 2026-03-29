@@ -7,8 +7,9 @@
 ## 已确认里程碑
 
 - [x] 固定 workspace 数据层独立于 session 历史与 runtime 内部消息。
-- [x] 固定 `020` 继续维护 `topic_id -> active_session_id` 入口映射。
+- [x] 固定 `020` 通过 `data/topic-index.json` 维护 `topic_id -> session_id` 入口映射。
 - [x] 固定 `021` 的 workspace 数据层跟随 active session，最终位于 `data/sessions/<session_id>/workspace/`。
+- [x] 固定当前 session 的 topic 元信息位于 `data/sessions/<session_id>/topic.json`。
 - [x] 固定 workspace 数据层采用文件化存储，不引入数据库。
 - [x] 固定候选帖子、已选帖子、总结、文案、图片结果等 workspace 对象属于 `021` 边界。
 - [x] 固定帖子 detail/raw/assets 仅作为当前 session workspace 对象的底层支撑，不并入执行层语义。
