@@ -1,4 +1,5 @@
 import type { CandidatePost, ChatMessage, PatternSummaryContent, TopicCard } from "../types/workspace";
+import type { SkillListItem } from "../types/skills";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 
@@ -73,6 +74,20 @@ export interface DeleteTopicApiResponse {
   deleted_topic_id: string;
 }
 
+export interface SkillListItemApiResponse {
+  name: string;
+  description: string;
+  source: string;
+  location: string;
+  available: boolean;
+  requires: string[];
+  content_summary: string;
+}
+
+export interface SkillsListApiResponse {
+  items: SkillListItemApiResponse[];
+}
+
 interface ErrorApiResponse {
   error_code: string;
   message: string;
@@ -138,6 +153,22 @@ export function toTopicCards(items: TopicListItemApiResponse[]): TopicCard[] {
 
 export async function listTopics(): Promise<TopicListApiResponse> {
   return requestJson<TopicListApiResponse>("/api/topics");
+}
+
+export function toSkills(items: SkillListItemApiResponse[]): SkillListItem[] {
+  return items.map((item) => ({
+    name: item.name,
+    description: item.description,
+    source: item.source,
+    location: item.location,
+    available: item.available,
+    requires: item.requires ?? [],
+    contentSummary: item.content_summary ?? "",
+  }));
+}
+
+export async function listSkills(): Promise<SkillsListApiResponse> {
+  return requestJson<SkillsListApiResponse>("/api/skills");
 }
 
 export async function createTopic(title: string, description = ""): Promise<CreateTopicApiResponse> {

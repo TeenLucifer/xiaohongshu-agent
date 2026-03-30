@@ -84,6 +84,10 @@ def create_app(
     async def list_topics(request: Request) -> Any:
         return request.app.state.backend_service.list_topics()
 
+    @app.get("/api/skills")
+    async def list_skills(request: Request) -> Any:
+        return request.app.state.backend_service.list_skills()
+
     @app.post("/api/topics")
     async def create_topic(
         request: Request,

@@ -69,7 +69,7 @@
   - session 的 `topic` 使用当前请求中的 `topic_title`
 - 同一 `topic_id` 再次访问时：
   - 默认复用当前活跃 session
-  - 若当前请求携带新的 `topic_title`，则应更新映射文件中的 `topic_title`
+  - 若当前请求携带新的 `topic_title`，则应更新对应 session 目录中的 `topic.json`
 - `POST /runs` 采用同步执行：
   - 请求阻塞直到 `runtime.run(...)` 返回
 - 第一版后端只服务前端主栏对话

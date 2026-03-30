@@ -14,6 +14,26 @@ Object.defineProperty(window, "scrollTo", {
 
 let topicStore = mockTopics.map((topic) => ({ ...topic }));
 let createdTopicCounter = 0;
+const mockSkills = [
+  {
+    name: "xhs-explore",
+    description: "搜索与查看小红书帖子。",
+    source: "builtin",
+    location: "/repo/skills/xiaohongshu-skills/skills/xhs-explore/SKILL.md",
+    available: true,
+    requires: [],
+    content_summary: "先读取 SKILL.md，再执行搜索与帖子查看流程。"
+  },
+  {
+    name: "xhs-auth",
+    description: "账号与登录相关能力。",
+    source: "builtin",
+    location: "/repo/skills/xiaohongshu-skills/skills/xhs-auth/SKILL.md",
+    available: false,
+    requires: ["ENV: XHS_COOKIE"],
+    content_summary: "用于账号登录状态确认和鉴权。"
+  }
+];
 
 beforeEach(() => {
   topicStore = mockTopics.map((topic) => ({ ...topic }));
@@ -37,6 +57,18 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
           session_id: `session-${item.id}`,
           updated_at: item.updatedAt
         }))
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path === "/api/skills" && (init?.method === undefined || init.method === "GET")) {
+    return new Response(
+      JSON.stringify({
+        items: mockSkills
       }),
       {
         status: 200,

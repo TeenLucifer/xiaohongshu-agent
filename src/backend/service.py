@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import re
 import secrets
 import shutil
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from agent.models import RunRequest as AgentRunRequest
 from agent.runtime import AgentRuntime
 from agent.session.models import Session, SessionMessage
+from agent.skills.loader import SkillRecord
 from agent.time_utils import now_local
 from backend.schemas import (
     CandidatePostContextResponse,
@@ -22,6 +25,8 @@ from backend.schemas import (
     PatternSummaryContentResponse,
     ResetResponse,
     RunResponse,
+    SkillListItemResponse,
+    SkillsListResponse,
     TopicListItemResponse,
     TopicListResponse,
     TopicMetaRecord,
@@ -33,6 +38,8 @@ from backend.topic_meta_store import TopicMetaStore
 from backend.topic_store import TopicSessionStore
 from backend.topic_truth_models import CandidatePostRecord, PostDetail
 from backend.topic_truth_store import SessionWorkspaceStore
+
+_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
 
 _CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -94,6 +101,40 @@ class BackendAppService:
             )
         items.sort(key=lambda item: item.updated_at, reverse=True)
         return TopicListResponse(items=items)
+
+    def list_skills(self) -> SkillsListResponse:
+        skills_by_path: dict[Path, SkillRecord] = {}
+
+        for skill in self._runtime.skills_loader.list_skills(filter_unavailable=False):
+            skills_by_path[skill.path.resolve()] = skill
+
+        sessions_root = self._runtime.data_root / "sessions"
+        if sessions_root.exists():
+            for session_dir in sorted(path for path in sessions_root.iterdir() if path.is_dir()):
+                for skill in self._runtime.skills_loader.list_skills(
+                    workspace_path=session_dir,
+                    filter_unavailable=False,
+                ):
+                    if skill.source != "workspace":
+                        continue
+                    skills_by_path.setdefault(skill.path.resolve(), skill)
+
+        items = [
+            SkillListItemResponse(
+                name=skill.name,
+                description=skill.description,
+                source=skill.source,
+                location=str(skill.path),
+                available=skill.available,
+                requires=_split_requirements(skill.missing_requirements),
+                content_summary=_build_skill_content_summary(skill.path),
+            )
+            for skill in sorted(
+                skills_by_path.values(),
+                key=lambda item: (item.source != "builtin", item.name.lower(), str(item.path)),
+            )
+        ]
+        return SkillsListResponse(items=items)
 
     def create_topic(self, *, title: str, description: str = "") -> CreateTopicResponse:
         topic_id = _generate_topic_id()
@@ -464,6 +505,22 @@ def _format_heat(record: CandidatePostRecord) -> str:
 def _to_topic_asset_url(*, topic_id: str, relative_path: str) -> str:
     normalized = relative_path.replace("\\", "/").lstrip("/")
     return f"/api/topics/{topic_id}/assets/{normalized}"
+
+
+def _split_requirements(raw: str) -> list[str]:
+    if raw.strip() == "":
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _build_skill_content_summary(path: Path, *, max_length: int = 1600) -> str:
+    content = path.read_text(encoding="utf-8")
+    match = _FRONTMATTER_RE.match(content)
+    stripped = content[match.end() :] if match is not None else content
+    normalized = stripped.strip()
+    if len(normalized) <= max_length:
+        return normalized
+    return f"{normalized[:max_length].rstrip()}\n\n..."
 
 
 def _encode_crockford(value: int, length: int) -> str:

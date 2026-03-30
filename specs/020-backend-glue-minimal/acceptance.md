@@ -45,8 +45,8 @@
 32. 在主栏输入一条消息并发送
 33. 确认页面调用真实 `POST /runs`
 34. 确认主栏显示真实 agent 回复，而不是本地 `createAgentReply(...)` mock 文本
-35. 确认右侧工作区仍保持现有 mock 数据
-36. 若接入 `021` 的右侧 `context` 读取能力
+35. 若组合 `021` 的右侧 `context` 读取能力
+36. 确认右侧 `candidatePosts` / `patternSummary` 已可走真实读取
 37. 确认后端是先 resolve 当前 active session，再读取该 session 的 workspace 数据
 38. 确认 `POST /reset` 后，主栏消息与右侧 workspace 数据语义保持一致
 

@@ -12,7 +12,7 @@ async function renderWorkspace(): Promise<ReturnType<typeof render>> {
       <AppRoutes />
     </MemoryRouter>
   );
-  await screen.findByRole("complementary", { name: "当前工作区" });
+  await screen.findByRole("complementary", { name: "右侧面板" });
   await screen.findByRole("button", { name: /春日通勤西装 3 套搭法/ });
   return view;
 }
@@ -21,7 +21,7 @@ describe("candidate posts feature", () => {
   it("renders tiny image-first cards and uses the real reference image on the first card", async () => {
     await renderWorkspace();
 
-    const cards = screen.getByRole("complementary", { name: "当前工作区" }).querySelectorAll("button[aria-haspopup='dialog']");
+    const cards = screen.getByRole("complementary", { name: "右侧面板" }).querySelectorAll("button[aria-haspopup='dialog']");
     expect(cards.length).toBeGreaterThanOrEqual(4);
 
     const firstImage = screen.getByRole("img", { name: "春日通勤西装 3 套搭法 封面图" }) as HTMLImageElement;

@@ -259,6 +259,15 @@ export function TopicWorkspacePage(): JSX.Element {
     setExpandedGroups((current) => ({ ...current, [sectionId]: !current[sectionId] }));
   }
 
+  const shellColumns =
+    isSidebarCollapsed && isContextOpen
+      ? "80px minmax(520px, 560px) minmax(640px, 1fr)"
+      : isSidebarCollapsed && !isContextOpen
+        ? "80px minmax(520px, 1fr) 72px"
+        : !isSidebarCollapsed && isContextOpen
+          ? "248px minmax(520px, 560px) minmax(560px, 1fr)"
+          : "248px minmax(520px, 1fr) 72px";
+
   async function handleSend(): Promise<void> {
     const value = composerValue.trim();
     if (value.length === 0 || topic === undefined || isSending) {
@@ -327,17 +336,10 @@ export function TopicWorkspacePage(): JSX.Element {
 
   return (
     <motion.main
-      animate={{
-        gridTemplateColumns:
-          isSidebarCollapsed && isContextOpen
-            ? "80px minmax(520px, 560px) minmax(640px, 1fr)"
-            : isSidebarCollapsed && !isContextOpen
-              ? "80px minmax(520px, 560px) 88px"
-              : !isSidebarCollapsed && isContextOpen
-                ? "248px minmax(520px, 560px) minmax(560px, 1fr)"
-                : "248px minmax(520px, 560px) 88px",
-      }}
+      animate={{ gridTemplateColumns: shellColumns }}
       className="grid h-screen gap-4 pr-4 pl-0"
+      style={{ width: "100%" }}
+      data-grid-columns={shellColumns}
       data-left-sidebar={isSidebarCollapsed ? "collapsed" : "open"}
       data-right-context={isContextOpen ? "open" : "collapsed"}
       data-state={isContextOpen ? "open" : "collapsed"}
@@ -430,22 +432,29 @@ export function TopicWorkspacePage(): JSX.Element {
       </section>
 
       <motion.aside
-        aria-label="当前工作区"
+        aria-label="右侧面板"
         className="my-4 h-[calc(100vh-2rem)] self-center overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-surface"
+        data-collapse-direction="right"
         data-state={isContextOpen ? "open" : "collapsed"}
         data-testid="workspace-context-column"
       >
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-4">
+          <div
+            className={
+              isContextOpen
+                ? "flex items-center justify-between border-b border-slate-100 px-4 py-4"
+                : "flex items-start justify-end px-3 py-3"
+            }
+          >
             {isContextOpen ? (
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  Current Workspace
+                  Context Panels
                 </p>
-                <h2 className="mt-2 text-lg font-semibold text-slate-900">当前工作区</h2>
+                <h2 className="mt-2 text-lg font-semibold text-slate-900">内容面板</h2>
               </div>
             ) : (
-              <div className="mx-auto" />
+              <div />
             )}
 
             <Button
@@ -549,11 +558,7 @@ export function TopicWorkspacePage(): JSX.Element {
               ) : null}
             </div>
           ) : (
-            <div className="flex flex-1 items-start justify-center pt-4">
-              <div className="writing-mode-vertical text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300 [writing-mode:vertical-rl]">
-                Workspace
-              </div>
-            </div>
+            <div className="flex flex-1 items-start justify-end px-3" />
           )}
         </div>
       </motion.aside>

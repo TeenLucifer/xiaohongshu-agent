@@ -12,7 +12,7 @@ async function renderWorkspace(): Promise<ReturnType<typeof render>> {
       <AppRoutes />
     </MemoryRouter>
   );
-  await screen.findByRole("complementary", { name: "当前工作区" });
+  await screen.findByRole("complementary", { name: "右侧面板" });
   return view;
 }
 

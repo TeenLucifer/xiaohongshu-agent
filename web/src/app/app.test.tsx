@@ -15,8 +15,9 @@ function renderWithRoute(initialEntry: string): ReturnType<typeof render> {
 }
 
 async function waitForTopicList(): Promise<void> {
-  await screen.findByRole("heading", { name: "话题列表", level: 1 });
-  await screen.findByRole("link", { name: /春季通勤穿搭/ });
+  await screen.findByRole("heading", { name: "新话题", level: 1 });
+  const matches = await screen.findAllByText("春季通勤穿搭");
+  expect(matches.length).toBeGreaterThan(0);
 }
 
 async function waitForWorkspace(): Promise<void> {
@@ -30,8 +31,10 @@ describe("topic workspace feature", () => {
 
     await waitForTopicList();
 
-    expect(screen.getByRole("heading", { name: "话题列表", level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /春季通勤穿搭/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "新话题", level: 1 })).toBeInTheDocument();
+    expect(screen.getAllByText("春季通勤穿搭").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("workspace-sidebar")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "新话题" })).toBeInTheDocument();
   });
 
   it("creates a topic and navigates to its workspace", async () => {
@@ -41,7 +44,6 @@ describe("topic workspace feature", () => {
     await waitForTopicList();
 
     await user.type(screen.getByLabelText("话题标题"), "新的测试话题");
-    await user.type(screen.getByLabelText("话题描述"), "测试描述");
     await user.click(screen.getByRole("button", { name: "创建话题" }));
 
     expect(
@@ -72,13 +74,19 @@ describe("topic workspace feature", () => {
     await user.click(screen.getByRole("button", { name: "收起工作区" }));
 
     expect(shell).toHaveAttribute("data-state", "collapsed");
+    expect(shell).toHaveAttribute("data-grid-columns", "248px minmax(520px, 1fr) 72px");
     expect(contextColumn).toHaveAttribute("data-state", "collapsed");
+    expect(contextColumn).toHaveAttribute("data-collapse-direction", "right");
+    expect(screen.queryByText("内容面板")).not.toBeInTheDocument();
+    expect(screen.queryByText("Context Panels")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "搜索结果", level: 2 })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "展开工作区" }));
 
     expect(shell).toHaveAttribute("data-state", "open");
+    expect(shell).toHaveAttribute("data-grid-columns", "248px minmax(520px, 560px) minmax(560px, 1fr)");
     expect(contextColumn).toHaveAttribute("data-state", "open");
+    expect(screen.getByText("内容面板")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "搜索结果", level: 2 })).toBeInTheDocument();
   });
 
@@ -95,16 +103,17 @@ describe("topic workspace feature", () => {
     expect(sidebar).toHaveAttribute("data-state", "collapsed");
     expect(screen.queryByRole("link", { name: /春季通勤穿搭/ })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "展开侧边栏" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "当前会话" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "历史记录" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Skills" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "新话题" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Skills" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "展开侧边栏" }));
 
     expect(shell).toHaveAttribute("data-left-sidebar", "open");
     expect(sidebar).toHaveAttribute("data-state", "open");
-    expect(screen.getByRole("button", { name: "当前会话" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "新话题" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "当前会话" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "历史记录" })).not.toBeInTheDocument();
   });
 
   it("renders the sidebar flush to the viewport edge without rounded corners", async () => {
@@ -130,6 +139,7 @@ describe("topic workspace feature", () => {
 
     expect(shell).toHaveAttribute("data-left-sidebar", "collapsed");
     expect(shell).toHaveAttribute("data-right-context", "collapsed");
+    expect(shell).toHaveAttribute("data-grid-columns", "80px minmax(520px, 1fr) 72px");
     expect(screen.getByRole("button", { name: "展开工作区" })).toBeInTheDocument();
   });
 
@@ -154,5 +164,16 @@ describe("topic workspace feature", () => {
     expect(
       await screen.findByRole("heading", { name: "租房小户型改造", level: 1 })
     ).toBeInTheDocument();
+  });
+
+  it("navigates back to the home entry from the sidebar new topic link", async () => {
+    const user = userEvent.setup();
+    renderWithRoute("/topics/topic-spring-commute");
+
+    await waitForWorkspace();
+
+    await user.click(screen.getByRole("link", { name: "新话题" }));
+
+    expect(await screen.findByRole("heading", { name: "新话题", level: 1 })).toBeInTheDocument();
   });
 });

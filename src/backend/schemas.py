@@ -151,6 +151,24 @@ class DeleteTopicResponse(BaseModel):
     deleted_topic_id: str
 
 
+class SkillListItemResponse(BaseModel):
+    """Read-only skill DTO for the skills page."""
+
+    name: str
+    description: str
+    source: str
+    location: str
+    available: bool
+    requires: list[str] = Field(default_factory=list)
+    content_summary: str = ""
+
+
+class SkillsListResponse(BaseModel):
+    """Response payload for listing all available and unavailable skills."""
+
+    items: list[SkillListItemResponse] = Field(default_factory=list)
+
+
 class CandidatePostImageResponse(BaseModel):
     """Read-only post image DTO for candidate post detail view."""
 
