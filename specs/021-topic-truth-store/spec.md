@@ -12,6 +12,7 @@
 - 为后续右侧工作区替换 mock 提供稳定数据来源
 - 第一波只打通 `candidatePosts` 与 `patternSummary` 的真实读取链路
 - 候选帖子详情支持为后续多图浏览提供稳定图片数组
+- 固定“全部帖子包 + 已选列表”的分层关系
 
 ## 非目标
 
@@ -34,7 +35,7 @@
 - 输入：
   - `topic_id`
   - topic 元数据
-  - 候选帖子、已选帖子、总结、文案、图片等对象
+  - 全部帖子包、已选帖子、总结、文案、图片等对象
 - 输出：
   - 稳定的 session workspace 文件目录
   - 稳定的 workspace 对象 schema
@@ -58,10 +59,13 @@
 - 正式 schema 使用英文键
 - 原始抓取对象仅保留在 `raw.json`
 - 帖子图片/资源复制进当前 session 的 workspace 目录，不只保存外部引用
+- 搜索结果真相来自当前 workspace 下的全部帖子包，不单独维护 `candidate_posts.json`
+- `selected_posts.json` 只保存用户手动选择和顺序，不冗余帖子详情字段
 - 第一波真实化只覆盖：
   - `candidatePosts`
   - `patternSummary`
-- 第一波读取链路为只读，不提供右侧写回交互
+- 第一波右侧读取链路以只读为主，但 `selected_posts.json` 已支持最小写回交互
+- 进入后续总结、文案、图片等流程时，默认只消费 `selected_posts.json` 对应帖子，不直接消费全部帖子包
 - 右侧 section 标题、状态与 summary 第一波继续沿用前端 mock
 - 列表卡片继续只使用单张封面图
 - 帖子详情可额外读取并暴露全部图片数组，用于弹窗内逐张浏览
@@ -71,7 +75,6 @@
 建议目录规则：
 
 - `data/sessions/<session_id>/workspace/meta.json`
-- `data/sessions/<session_id>/workspace/candidate_posts.json`
 - `data/sessions/<session_id>/workspace/selected_posts.json`
 - `data/sessions/<session_id>/workspace/pattern_summary.json`
 - `data/sessions/<session_id>/workspace/copy_draft.json`
@@ -101,24 +104,13 @@
 - `Topic Meta` 保存于 `data/sessions/<session_id>/topic.json`
 - 不再单独放在 `data/topics/<topic_id>/`
 
-### Candidate Posts
-
-- 候选帖子列表
-- 每条至少包含：
-  - `post_id`
-  - `title`
-  - `excerpt`
-  - 可选 `author`
-  - 可选 `source_url`
-  - 可选 `heat`
-  - 可选 `cover_image_path`
-  - `selected`
-  - 可选 `manual_order`
-
 ### Selected Posts
 
 - 已选帖子列表
-- 结构复用 candidate post 的最小字段
+- 每条只包含：
+  - `post_id`
+  - `manual_order`
+- 不冗余标题、作者、封面、正文等帖子详情字段
 
 ### Pattern Summary
 
@@ -190,6 +182,10 @@
 - 第一波只暴露：
   - `candidate_posts`
   - `pattern_summary`
+- `candidate_posts` 在只读 DTO 中由：
+  - `posts/<post_id>/post.json`
+  - `selected_posts.json`
+  共同组装
 - `candidate_posts` 在只读 DTO 中保留单封面 `imageUrl`
 - 候选帖详情可附带完整 `images[]`，用于多图帖子详情翻页
 
@@ -242,10 +238,11 @@ DTO 策略：
 
 - `CandidatePost.id` 直接使用 `post_id`
 - `bodyText` 从 `posts/<post_id>/post.json.content.text` 读取
-- `imageUrl` 优先取 `cover_image_path`，缺失时可回退到首张媒体资源
+- `imageUrl` 从 `posts/<post_id>/post.json.media[0]` 或首张可用图片资源推导
 - `images[]` 由 `posts/<post_id>/post.json.media[]` 顺序映射
   - 每项至少包含稳定 `id`、可访问 `imageUrl` 和基础 `alt`
   - 若 `media[]` 为空，则允许回退为仅包含封面图的单项数组
+- `selected` 与 `manualOrder` 由 `selected_posts.json` 映射
 - session workspace 内部资源图片通过后端资源读取路径暴露给前端
   - 例如：`/api/topics/{topic_id}/assets/...`
 - `heat` 由 `likes/favorites/comments` 组装为前端当前展示字符串
@@ -254,9 +251,10 @@ DTO 策略：
 
 - 当前 active session 对应的 workspace 目录结构稳定
 - workspace 元数据与业务对象 schema 稳定
-- 候选帖子、已选帖子、总结、文案、图片结果能各自独立读写
+- 已选帖子、总结、文案、图片结果能各自独立读写
 - 单篇帖子 detail/raw/assets 可作为候选帖子详情支撑对象独立读写
 - session workspace 数据层与 session 历史/记忆边界清晰
 - 右侧工作区后续可基于该 session workspace 数据层替换当前 mock 数据
 - 第一波只要求 `candidatePosts` 与 `patternSummary` 可被后端读取并返回给前端
+- `candidatePosts` 由全部帖子包和 `selected_posts.json` 组装，而不是依赖独立候选文件
 - 多图帖子在候选帖详情场景下可基于 `media[]` 暴露完整图片数组

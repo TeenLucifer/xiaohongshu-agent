@@ -112,11 +112,13 @@ class ContextBuilder:
         workspace_path: Path,
     ) -> str:
         runtime_context = self._prompt_config.runtime_context
+        workspace_data_root = workspace_path / "workspace"
         lines = [
             runtime_context.header,
             f"{runtime_context.current_time}: {format_runtime_time()}",
             f"{runtime_context.session_id}: {request.session_id}",
             f"{runtime_context.workspace_path}: {workspace_path}",
+            f"{runtime_context.workspace_data_root}: {workspace_data_root}",
             "",
             request.user_input,
         ]

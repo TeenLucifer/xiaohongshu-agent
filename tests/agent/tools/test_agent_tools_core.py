@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from pathlib import Path
 from typing import Any, cast
 
@@ -50,6 +51,30 @@ def test_filesystem_tools_read_write_and_list_dir(tmp_path: Path) -> None:
     assert write_payload["path"] == str(workspace / "notes" / "idea.txt")
     assert read_result == "hello world"
     assert cast(list[dict[str, Any]], list_payload["entries"])[0]["name"] == "idea.txt"
+
+
+def test_write_file_serializes_json_objects(tmp_path: Path) -> None:
+    registry, workspace, _, _ = make_registry(tmp_path)
+
+    write_result = registry.execute_tool(
+        "write_file",
+        {
+            "path": "notes/payload.json",
+            "content": {"posts": [{"post_id": "note-1", "title": "标题"}]},
+        },
+    )
+    write_payload = cast(dict[str, Any], write_result)
+    saved = json.loads((workspace / "notes" / "payload.json").read_text(encoding="utf-8"))
+
+    assert write_payload["path"] == str(workspace / "notes" / "payload.json")
+    assert saved["posts"][0]["post_id"] == "note-1"
+
+
+def test_write_file_rejects_non_text_non_json_inputs(tmp_path: Path) -> None:
+    registry, _, _, _ = make_registry(tmp_path)
+
+    with pytest.raises(ToolExecutionError):
+        registry.execute_tool("write_file", {"path": "notes/value.json", "content": 42})
 
 
 def test_filesystem_tools_can_read_files_from_extra_allowed_skill_dirs(tmp_path: Path) -> None:

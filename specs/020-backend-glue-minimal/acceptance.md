@@ -18,37 +18,39 @@
 9. 确认已落盘当前 `topic_id -> session_id`
 10. 检查 `data/sessions/<session_id>/topic.json`
 11. 确认 topic 标题与描述以 session 目录内的 `topic.json` 为准
-12. 对同一个 `topic_id` 再次请求 `GET /workspace`
-13. 使用新的 `topic_title`
-14. 确认返回的是同一个当前活跃 `session_id`
-15. 确认 session 目录内 `topic.json` 中的标题已更新
-16. 调用 `POST /api/topics/{topic_id}/runs`
-17. 传入真实 `user_input` 和 `topic_title`
-18. 确认后端同步返回 agent 的真实结果，而不是 mock 数据
-19. 确认返回中包含：
+12. 检查 `data/sessions/<session_id>/workspace/`
+13. 确认创建 session 时已预先存在 `workspace/` 与 `workspace/posts/`
+14. 对同一个 `topic_id` 再次请求 `GET /workspace`
+15. 使用新的 `topic_title`
+16. 确认返回的是同一个当前活跃 `session_id`
+17. 确认 session 目录内 `topic.json` 中的标题已更新
+18. 调用 `POST /api/topics/{topic_id}/runs`
+19. 传入真实 `user_input` 和 `topic_title`
+20. 确认后端同步返回 agent 的真实结果，而不是 mock 数据
+21. 确认返回中包含：
    - `messages`
    - `last_run.final_text`
    - `last_run.tool_calls`
    - `last_run.artifacts`
-20. 确认 `messages` 中只包含主栏所需的 `user/agent` 消息，不直接包含 `tool` 消息
-21. 再调用 `GET /messages`
-22. 确认能拿到最新消息列表
-23. 调用 `POST /reset`
-24. 传入 `topic_title`
-25. 确认当前活跃 session 被重置
-26. 确认返回的工作区视图中主栏消息已清空
-27. 构造一次 runtime 或 provider 错误
-28. 确认后端返回统一的 `ErrorResponse`
-29. 启动前端 dev server，并配置 `VITE_API_BASE_URL`
-30. 进入某个 topic 工作台页面
-31. 确认主栏初次加载会请求真实 `GET /workspace`
-32. 在主栏输入一条消息并发送
-33. 确认页面调用真实 `POST /runs`
-34. 确认主栏显示真实 agent 回复，而不是本地 `createAgentReply(...)` mock 文本
-35. 若组合 `021` 的右侧 `context` 读取能力
-36. 确认右侧 `candidatePosts` / `patternSummary` 已可走真实读取
-37. 确认后端是先 resolve 当前 active session，再读取该 session 的 workspace 数据
-38. 确认 `POST /reset` 后，主栏消息与右侧 workspace 数据语义保持一致
+22. 确认 `messages` 中只包含主栏所需的 `user/agent` 消息，不直接包含 `tool` 消息
+23. 再调用 `GET /messages`
+24. 确认能拿到最新消息列表
+25. 调用 `POST /reset`
+26. 传入 `topic_title`
+27. 确认当前活跃 session 被重置
+28. 确认返回的工作区视图中主栏消息已清空
+29. 构造一次 runtime 或 provider 错误
+30. 确认后端返回统一的 `ErrorResponse`
+31. 启动前端 dev server，并配置 `VITE_API_BASE_URL`
+32. 进入某个 topic 工作台页面
+33. 确认主栏初次加载会请求真实 `GET /workspace`
+34. 在主栏输入一条消息并发送
+35. 确认页面调用真实 `POST /runs`
+36. 确认主栏显示真实 agent 回复，而不是本地 `createAgentReply(...)` mock 文本
+37. 若组合 `021` 的右侧 `context` 读取能力
+38. 确认右侧 `candidatePosts` / `patternSummary` 已可走真实读取
+39. 确认后端是先 resolve 当前 active session，再读取该 session 的 workspace 数据
+40. 确认 `POST /reset` 后，主栏消息与右侧 workspace 数据语义保持一致
 
 ## 自动化验收
 

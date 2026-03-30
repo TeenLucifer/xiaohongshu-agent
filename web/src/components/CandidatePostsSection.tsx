@@ -52,14 +52,16 @@ function moveItem(order: string[], postId: string, direction: "up" | "down"): st
   return next;
 }
 
-export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JSX.Element {
-  const [selectedOrder, setSelectedOrder] = useState<string[]>(() => buildInitialOrder(posts));
+export function CandidatePostsSection({
+  posts,
+  onSelectedOrderChange,
+}: {
+  posts: CandidatePost[];
+  onSelectedOrderChange?: (nextSelectedOrder: string[]) => void;
+}): JSX.Element {
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-
-  useEffect(() => {
-    setSelectedOrder(buildInitialOrder(posts));
-  }, [posts]);
+  const selectedOrder = useMemo(() => buildInitialOrder(posts), [posts]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
@@ -103,14 +105,20 @@ export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JS
     setActiveImageIndex(0);
   }, [activePostId]);
 
-  function toggleSelected(postId: string): void {
-    setSelectedOrder((current) => {
-      if (current.includes(postId)) {
-        return current.filter((value) => value !== postId);
-      }
+  function commitSelectedOrder(nextSelectedOrder: string[]): void {
+    onSelectedOrderChange?.(nextSelectedOrder);
+  }
 
-      return [...current, postId];
-    });
+  function toggleSelected(postId: string): void {
+    if (selectedOrder.includes(postId)) {
+      commitSelectedOrder(selectedOrder.filter((value) => value !== postId));
+      return;
+    }
+    commitSelectedOrder([...selectedOrder, postId]);
+  }
+
+  function moveSelected(postId: string, direction: "up" | "down"): void {
+    commitSelectedOrder(moveItem(selectedOrder, postId, direction));
   }
 
   function getOrder(postId: string): number | null {
@@ -268,11 +276,11 @@ export function CandidatePostsSection({ posts }: { posts: CandidatePost[] }): JS
                 <div className="flex flex-wrap items-center gap-2">
                   {selectedOrder.includes(activePost.id) ? (
                     <>
-                      <Button onClick={() => setSelectedOrder((current) => moveItem(current, activePost.id, "up"))} size="sm" type="button" variant="secondary">
+                      <Button onClick={() => moveSelected(activePost.id, "up")} size="sm" type="button" variant="secondary">
                         <ArrowUp className="h-3.5 w-3.5" strokeWidth={1.8} />
                         上移
                       </Button>
-                      <Button onClick={() => setSelectedOrder((current) => moveItem(current, activePost.id, "down"))} size="sm" type="button" variant="secondary">
+                      <Button onClick={() => moveSelected(activePost.id, "down")} size="sm" type="button" variant="secondary">
                         <ArrowDown className="h-3.5 w-3.5" strokeWidth={1.8} />
                         下移
                       </Button>

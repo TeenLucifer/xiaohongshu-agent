@@ -45,6 +45,7 @@
   - `extra_allowed_dirs = [project_root/skills, skill_dir, temp_dir]`
 - 路径解析、越界判断、allowed/extra allowed 语义与 `nanobot` 一致
 - `read_file` 同时支持文本与图片读取
+- `write_file` 同时支持文本与 JSON 文件写入
 - `edit_file` 保留 `nanobot` 风格的模糊匹配/去空白匹配/fallback 替换能力
 - `exec` 参数与行为整体贴 `nanobot`：
   - 默认 `timeout = 60s`
@@ -109,6 +110,7 @@
 - 文件系统工具只能访问 `allowed_dir` 与 `extra_allowed_dirs`
 - 默认工具上下文会包含项目根目录 `skills/`
 - `read_file` 可读取文本和图片
+- `write_file` 可写入文本，也可在传入 `dict/list` 时自动序列化为 JSON 文件
 - `edit_file` 的模糊匹配替换生效
 - `exec` 的默认 timeout、最大 timeout 与输出截断行为符合约束
 - `pwd` 可作为最小诊断命令执行

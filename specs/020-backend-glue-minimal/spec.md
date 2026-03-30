@@ -135,8 +135,10 @@
   - `topic.json`
   - `session.jsonl`
   - `workspace/`
+  - `workspace/posts/`
   - `memory/`
   - `logs/`
+- 创建新 session 时，应在 session 根目录下预先创建 `workspace/` 与 `workspace/posts/`，避免运行时再由 agent 猜测下载目标目录
 - 后端通过 `topic-index.json` 找到 `session_id` 后，再从该 session 目录读取 topic 元信息与 workspace 数据
 
 ## HTTP API

@@ -15,6 +15,7 @@ import os
 import sys
 import tempfile
 
+
 def _session_tab_file(port: int) -> str:
     """返回指定端口的 session tab 文件路径（每账号独立隔离）。"""
     return os.path.join(tempfile.gettempdir(), "xhs", f"session_tab_{port}.txt")
@@ -513,7 +514,11 @@ def cmd_wait_login(args: argparse.Namespace) -> None:
         _output(
             {
                 "logged_in": success,
-                "message": "登录成功" if success else "等待超时，请重新运行 get-qrcode 获取新二维码",
+                "message": (
+                    "登录成功"
+                    if success
+                    else "等待超时，请重新运行 get-qrcode 获取新二维码"
+                ),
             },
             exit_code=0 if success else 2,
         )
@@ -667,6 +672,37 @@ def cmd_user_profile(args: argparse.Namespace) -> None:
     try:
         profile = get_user_profile(page, args.user_id, args.xsec_token)
         _output(profile.to_dict())
+    finally:
+        browser.close_page(page)
+        browser.close()
+
+
+def cmd_ingest_posts(args: argparse.Namespace) -> None:
+    """将已获取详情的帖子结果写入 posts 目录。"""
+    from pathlib import Path
+
+    from xhs.research_ingest import (
+        ensure_repo_src_on_path,
+        ingest_posts_into_posts_dir,
+        load_posts_payload,
+    )
+
+    ensure_repo_src_on_path()
+    browser, page = _connect(args)
+    try:
+        posts = load_posts_payload(Path(args.input_json))
+        result = ingest_posts_into_posts_dir(
+            posts_dir=Path(args.posts_dir),
+            posts=posts,
+            page=page,
+        )
+        _output(
+            {
+                "success": True,
+                "posts_dir": str(Path(args.posts_dir).resolve()),
+                **result,
+            }
+        )
     finally:
         browser.close_page(page)
         browser.close()
@@ -1122,6 +1158,16 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_argument("--user-id", required=True, help="用户 ID")
     sub.add_argument("--xsec-token", required=True, help="xsec_token")
     sub.set_defaults(func=cmd_user_profile)
+
+    # ingest-posts
+    sub = subparsers.add_parser("ingest-posts", help="将帖子详情和图片写入 posts 目录")
+    sub.add_argument(
+        "--posts-dir",
+        required=True,
+        help="帖子包父目录，例如 /abs/path/posts",
+    )
+    sub.add_argument("--input-json", required=True, help="帖子 payload JSON 文件路径")
+    sub.set_defaults(func=cmd_ingest_posts)
 
     # post-comment
     sub = subparsers.add_parser("post-comment", help="发表评论")

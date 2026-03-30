@@ -14,14 +14,13 @@ from agent.time_utils import now_local
 from agent.tools.registry import ToolDefinition
 from backend.app import create_app
 from backend.topic_truth_models import (
-    CandidatePostRecord,
-    CandidatePostsDocument,
     PatternSummaryRecord,
     PostContent,
     PostDetail,
-    PostHeat,
     PostMediaAsset,
     PostMetrics,
+    SelectedPostRecord,
+    SelectedPostsDocument,
 )
 from backend.topic_truth_store import SessionWorkspaceStore
 
@@ -65,26 +64,6 @@ def seed_session_context(tmp_path: Path, session_id: str) -> None:
     source_asset_2 = tmp_path / "image-02.jpg"
     source_asset_2.write_bytes(b"topic-image-2")
 
-    store.write_candidate_posts(
-        session_id,
-        CandidatePostsDocument(
-            items=[
-                CandidatePostRecord(
-                    post_id="post-1",
-                    title="CLI 正在回归",
-                    excerpt="这是一段摘要",
-                    author="璟礼",
-                    source_url="https://example.com/post-1",
-                    heat=PostHeat(likes=10, favorites=20, comments=3),
-                    cover_image_path="posts/post-1/assets/image-01.jpg",
-                    selected=True,
-                    manual_order=1,
-                    updated_at=now,
-                )
-            ],
-            updated_at=now,
-        ),
-    )
     store.write_post_detail(
         session_id,
         "post-1",
@@ -99,16 +78,23 @@ def seed_session_context(tmp_path: Path, session_id: str) -> None:
                 PostMediaAsset(
                     asset_id="image-01",
                     kind="image",
-                    path="posts/post-1/assets/image-01.jpg",
+                    path="assets/image-01.jpg",
                     order=1,
                 ),
                 PostMediaAsset(
                     asset_id="image-02",
                     kind="image",
-                    path="posts/post-1/assets/image-02.jpg",
+                    path="assets/image-02.jpg",
                     order=2,
                 ),
             ],
+            updated_at=now,
+        ),
+    )
+    store.write_selected_posts(
+        session_id,
+        SelectedPostsDocument(
+            items=[SelectedPostRecord(post_id="post-1", manual_order=1)],
             updated_at=now,
         ),
     )
@@ -303,6 +289,57 @@ def test_context_endpoint_returns_candidate_posts_and_pattern_summary(tmp_path: 
     )
     assert payload["candidate_posts"][0]["heat"] == "收藏 20 · 点赞 10 · 评论 3"
     assert payload["pattern_summary"]["titlePatterns"] == ["场景 + 结论"]
+
+
+def test_update_selected_posts_endpoint_persists_selection_order(tmp_path: Path) -> None:
+    async def run() -> tuple[dict[str, Any], dict[str, Any]]:
+        async with make_client(tmp_path) as client:
+            workspace_response = await client.get(
+                "/api/topics/topic-1/workspace",
+                params={"topic_title": "话题一"},
+            )
+            session_id = cast(dict[str, Any], workspace_response.json())["session_id"]
+            seed_session_context(tmp_path, session_id)
+            store = SessionWorkspaceStore(tmp_path / "data")
+            now = now_local()
+            store.write_post_detail(
+                session_id,
+                "post-2",
+                PostDetail(
+                    post_id="post-2",
+                    title="Agent 调研工作流",
+                    post_type="image_text",
+                    url="https://example.com/post-2",
+                    content=PostContent(text="另一条正文"),
+                    metrics=PostMetrics(likes=1, favorites=2, comments=3),
+                    updated_at=now,
+                ),
+            )
+
+            update_response = await client.put(
+                "/api/topics/topic-1/selected-posts",
+                json={
+                    "topic_title": "话题一",
+                    "post_ids": ["post-2", "post-1"],
+                },
+            )
+            context_response = await client.get(
+                "/api/topics/topic-1/context",
+                params={"topic_title": "话题一"},
+            )
+            assert update_response.status_code == 200
+            assert context_response.status_code == 200
+            return (
+                cast(dict[str, Any], update_response.json()),
+                cast(dict[str, Any], context_response.json()),
+            )
+
+    update_payload, context_payload = asyncio.run(run())
+    assert [item["post_id"] for item in update_payload["items"]] == ["post-2", "post-1"]
+    selected_posts = {item["id"]: item for item in context_payload["candidate_posts"]}
+    assert selected_posts["post-2"]["selected"] is True
+    assert selected_posts["post-2"]["manualOrder"] == 1
+    assert selected_posts["post-1"]["manualOrder"] == 2
 
 
 def test_topic_asset_endpoint_serves_copied_asset(tmp_path: Path) -> None:

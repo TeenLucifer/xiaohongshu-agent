@@ -7,6 +7,7 @@ from typing import Any
 
 from agent.context_builder import ContextBuilder
 from agent.loop_runner import (
+    MAX_ITERATIONS,
     MAX_ITERATIONS_FALLBACK_TEXT,
     LoopModelResponse,
     LoopRunner,
@@ -277,7 +278,7 @@ def test_loop_returns_fixed_fallback_after_max_iterations(tmp_path: Path) -> Non
                 content="继续",
                 tool_calls=[ToolCallPayload(id=f"call-{index}", name="alpha", arguments={})],
             )
-            for index in range(20)
+            for index in range(MAX_ITERATIONS)
         ]
     )
     runner = LoopRunner(model_client=model)

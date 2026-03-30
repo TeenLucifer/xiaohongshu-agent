@@ -13,6 +13,7 @@ Object.defineProperty(window, "scrollTo", {
 });
 
 let topicStore = mockTopics.map((topic) => ({ ...topic }));
+let candidatePostStore = JSON.parse(JSON.stringify(mockCandidatePostsByTopicId)) as Record<string, typeof mockCandidatePostsByTopicId[string]>;
 let createdTopicCounter = 0;
 const mockSkills = [
   {
@@ -37,6 +38,10 @@ const mockSkills = [
 
 beforeEach(() => {
   topicStore = mockTopics.map((topic) => ({ ...topic }));
+  candidatePostStore = JSON.parse(JSON.stringify(mockCandidatePostsByTopicId)) as Record<
+    string,
+    typeof mockCandidatePostsByTopicId[string]
+  >;
   createdTopicCounter = 0;
 });
 
@@ -149,9 +154,40 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
       JSON.stringify({
         topic_id: topicId,
         topic_title: requestUrl.searchParams.get("topic_title") ?? topic.title,
-        candidate_posts: mockCandidatePostsByTopicId[topicId] ?? [],
+        candidate_posts: candidatePostStore[topicId] ?? [],
         pattern_summary: mockPatternSummaryByTopicId[topicId] ?? null,
         updated_at: "2026-03-29T10:00:00+08:00"
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.endsWith("/selected-posts") && init?.method === "PUT") {
+    const rawBody = init.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as { post_ids?: string[] })
+        : {};
+    const selectedIds = parsedBody.post_ids ?? [];
+    const orderIndex = new Map(selectedIds.map((postId, index) => [postId, index + 1]));
+    const currentPosts = candidatePostStore[topicId] ?? [];
+    candidatePostStore[topicId] = currentPosts.map((post) => ({
+      ...post,
+      selected: orderIndex.has(post.id),
+      manualOrder: orderIndex.get(post.id) ?? null,
+    }));
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        items: selectedIds.map((postId, index) => ({
+          post_id: postId,
+          manual_order: index + 1,
+        })),
+        updated_at: "2026-03-29T10:00:30+08:00",
       }),
       {
         status: 200,

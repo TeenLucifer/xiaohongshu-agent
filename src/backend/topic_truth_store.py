@@ -54,6 +54,20 @@ class SessionWorkspaceStore:
     def get_post_assets_root(self, session_id: str, post_id: str) -> Path:
         return self.get_post_root(session_id, post_id) / "assets"
 
+    def list_post_ids(self, session_id: str) -> list[str]:
+        posts_root = self.get_posts_root(session_id)
+        if not posts_root.exists():
+            return []
+        return sorted(path.name for path in posts_root.iterdir() if path.is_dir())
+
+    def list_post_details(self, session_id: str) -> list[PostDetail]:
+        details: list[PostDetail] = []
+        for post_id in self.list_post_ids(session_id):
+            detail = self.read_post_detail(session_id, post_id)
+            if detail is not None:
+                details.append(detail)
+        return details
+
     def read_meta(self, session_id: str) -> TopicMeta | None:
         return self._read_model(self.get_workspace_root(session_id) / "meta.json", TopicMeta)
 

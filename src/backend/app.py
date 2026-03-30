@@ -20,6 +20,7 @@ from backend.schemas import (
     ErrorResponse,
     ResetRequestBody,
     RunRequestBody,
+    UpdateSelectedPostsRequestBody,
 )
 from backend.service import BackendApiError, BackendAppService
 from backend.topic_meta_store import TopicMetaStore
@@ -175,6 +176,18 @@ def create_app(
         return request.app.state.backend_service.get_workspace_context(
             topic_id=topic_id,
             topic_title=topic_title,
+        )
+
+    @app.put("/api/topics/{topic_id}/selected-posts")
+    async def update_selected_posts(
+        request: Request,
+        topic_id: str,
+        payload: UpdateSelectedPostsRequestBody,
+    ) -> Any:
+        return request.app.state.backend_service.update_selected_posts(
+            topic_id=topic_id,
+            topic_title=payload.topic_title,
+            post_ids=payload.post_ids,
         )
 
     @app.get("/api/topics/{topic_id}/assets/{asset_path:path}")

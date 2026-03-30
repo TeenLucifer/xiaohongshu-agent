@@ -51,6 +51,13 @@ class CreateTopicRequestBody(BaseModel):
     description: str = ""
 
 
+class UpdateSelectedPostsRequestBody(BaseModel):
+    """Request body for persisting selected post ids and order."""
+
+    topic_title: str = Field(min_length=1)
+    post_ids: list[str] = Field(default_factory=list)
+
+
 class MessageResponse(BaseModel):
     """Minimal chat message DTO for the frontend main column."""
 
@@ -217,4 +224,20 @@ class WorkspaceContextResponse(BaseModel):
     topic_title: str
     candidate_posts: list[CandidatePostContextResponse] = Field(default_factory=list)
     pattern_summary: PatternSummaryContentResponse | None = None
+    updated_at: datetime
+
+
+class SelectedPostItemResponse(BaseModel):
+    """Minimal persisted selected-post item."""
+
+    post_id: str
+    manual_order: int
+
+
+class SelectedPostsResponse(BaseModel):
+    """Response payload for selected-post persistence."""
+
+    topic_id: str
+    topic_title: str
+    items: list[SelectedPostItemResponse] = Field(default_factory=list)
     updated_at: datetime

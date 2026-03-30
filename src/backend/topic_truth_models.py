@@ -47,10 +47,17 @@ class CandidatePostsDocument(BaseModel):
     updated_at: datetime
 
 
+class SelectedPostRecord(BaseModel):
+    """Minimal selected-post state persisted for one workspace."""
+
+    post_id: str
+    manual_order: int
+
+
 class SelectedPostsDocument(BaseModel):
     """Selected post list for the workspace."""
 
-    items: list[CandidatePostRecord] = Field(default_factory=list)
+    items: list[SelectedPostRecord] = Field(default_factory=list)
     updated_at: datetime
 
 

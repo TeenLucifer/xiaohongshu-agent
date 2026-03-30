@@ -75,7 +75,7 @@ def test_runtime_initializes_with_fixed_components(tmp_path: Path) -> None:
     assert runtime.skills_loader is not None
     assert runtime.tools_registry is not None
     assert runtime.loop_runner is not None
-    assert "persist_xhs_posts" in {
+    assert "persist_xhs_posts" not in {
         tool.name for tool in runtime.tools_registry.list_tool_definitions()
     }
 
@@ -119,7 +119,15 @@ def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> 
     assert "--note-type 图文" in prompt
     assert "Top 3 篇图文帖子获取详情" in prompt
     assert "视频帖子，首版应直接跳过" in prompt
-    assert "调用 persist_xhs_posts" in prompt
+    assert "xhs-research-ingest" in prompt
+    assert "write_file" in prompt
+    assert "python scripts/cli.py ingest-posts" in prompt
+    assert "正式契约是通用 `posts[] + --posts-dir`" in prompt
+    assert "Workspace Data Root" in prompt
+    assert "--posts-dir <workspace_data_root>/posts" in prompt
+    assert "不要自行拼接或猜测 posts 目录" in prompt
+    assert "帖子包已保存到目标 posts 目录" in prompt
+    assert "只能基于用户已加入 `selected_posts.json` 的帖子" in prompt
     assert "当前允许访问的目录包括：" in prompt
     assert f"- {tmp_path / 'data' / 'sessions' / 'sess-1'}" in prompt
     assert f"- {tmp_path / 'skills'}" in prompt
@@ -162,7 +170,11 @@ def test_context_builder_builds_messages_with_session_history_and_runtime_contex
     assert "Asia/Shanghai" in messages[2].content
     assert "+0800" in messages[2].content
     assert "Session ID: sess-1" in messages[2].content
-    assert f"Workspace Path: {tmp_path / 'data' / 'sessions' / 'sess-1'}" in messages[2].content
+    assert f"Session Root Path: {tmp_path / 'data' / 'sessions' / 'sess-1'}" in messages[2].content
+    assert (
+        f"Workspace Data Root: {tmp_path / 'data' / 'sessions' / 'sess-1' / 'workspace'}"
+        in messages[2].content
+    )
     assert "- /tmp/a.png" in messages[2].content
 
 

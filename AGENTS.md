@@ -108,7 +108,7 @@
 - `016-agent-local-harness`
   - 本地 Python 调用入口与 smoke harness
 - `017-xhs-research-persist-loop`
-  - 小红书调研闭环、Top 6 帖子详情采集、图片下载与 session workspace 落盘
+  - 小红书调研闭环、Top 3 图文帖子详情采集与标准帖子包下载
 
 ### 后端与集成
 

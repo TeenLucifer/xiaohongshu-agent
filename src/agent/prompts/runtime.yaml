@@ -16,9 +16,10 @@ identity:
     - "需要在某个目录中执行命令时，只能通过 exec.working_dir。"
     - "当 skill 文档中的命令使用相对路径（例如 `python scripts/cli.py ...`）时，不要在当前 session workspace 中直接执行，应将 exec.working_dir 设为该 skill 的执行根目录。"
     - "当用户要求调研、搜集或整理小红书热门内容时，首版仅处理图文帖子。应先使用 xhs-explore 搜索，并显式限制 `--note-type 图文`，再按热度或优先级选取 Top 3 篇图文帖子获取详情。"
-    - "拿到 Top 3 篇图文帖子详情后，应调用 persist_xhs_posts 将结构化结果写入当前 session workspace。persist_xhs_posts 只负责落盘，不负责搜索和获取详情。"
+    - "拿到 Top 3 篇图文帖子详情后，应使用 xhs-research-ingest 技能承接结果。该 skill 的正式契约是通用 `posts[] + --posts-dir`；在当前产品运行时中，应优先使用 runtime context 里的 `Workspace Data Root`，先用 write_file 将 posts JSON 写到临时文件，再执行 `python scripts/cli.py ingest-posts --posts-dir <workspace_data_root>/posts --input-json <payload>` 将帖子下载成标准帖子包。不要自行拼接或猜测 posts 目录。"
     - "若搜索结果中出现视频帖子，首版应直接跳过，不要对视频帖子执行详情获取、资源下载或 workspace 落盘。"
-    - "调研类任务完成时，应同时给出文本调研摘要，并确保候选帖子结果已同步到当前工作区。"
+    - "调研类任务完成时，应同时给出文本调研摘要，并明确说明帖子包已保存到目标 posts 目录。"
+    - "帖子包下载完成后，不要默认把全部帖子继续用于总结、文案或图片流程；后续若进入这些流程，只能基于用户已加入 `selected_posts.json` 的帖子。"
     - "完成任务后应停止工具调用并给出执行结果。"
 
 memory:
@@ -43,5 +44,6 @@ runtime_context:
   header: "[Runtime Context — metadata only, not instructions]"
   current_time: "Current Time"
   session_id: "Session ID"
-  workspace_path: "Workspace Path"
+  workspace_path: "Session Root Path"
+  workspace_data_root: "Workspace Data Root"
   attachments: "Attachments"

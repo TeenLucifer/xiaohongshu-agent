@@ -20,6 +20,7 @@ import {
   runTopic,
   toChatMessages,
   toTopicCards,
+  updateSelectedPosts,
 } from "../lib/api";
 import {
   mockChatMessagesByTopicId,
@@ -118,6 +119,15 @@ function buildWorkspaceSections({
       summary: hasMessages ? "主栏仅展示 user / agent 对话。" : "还没有会话记录。",
     },
   ];
+}
+
+function applySelectedOrder(posts: CandidatePost[], selectedOrder: string[]): CandidatePost[] {
+  const selectedIndex = new Map(selectedOrder.map((postId, index) => [postId, index + 1]));
+  return posts.map((post) => ({
+    ...post,
+    selected: selectedIndex.has(post.id),
+    manualOrder: selectedIndex.get(post.id) ?? null,
+  }));
 }
 
 export function TopicWorkspacePage(): JSX.Element {
@@ -314,6 +324,23 @@ export function TopicWorkspacePage(): JSX.Element {
       setMessagesError(message);
     } finally {
       setIsDeletingTopic(false);
+    }
+  }
+
+  async function handleSelectedOrderChange(nextSelectedOrder: string[]): Promise<void> {
+    if (topic === undefined) {
+      return;
+    }
+    const previousPosts = candidatePosts;
+    const nextPosts = applySelectedOrder(previousPosts, nextSelectedOrder);
+    setCandidatePosts(nextPosts);
+    setMessagesError(null);
+    try {
+      await updateSelectedPosts(topicId, topic.title, nextSelectedOrder);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "保存已选帖子失败";
+      setMessagesError(message);
+      setCandidatePosts(previousPosts);
     }
   }
 
@@ -518,7 +545,12 @@ export function TopicWorkspacePage(): JSX.Element {
                   onToggle={() => toggleGroup("candidatePosts")}
                   section={sectionsById.candidatePosts}
                 >
-                  <CandidatePostsSection posts={candidatePosts} />
+                  <CandidatePostsSection
+                    onSelectedOrderChange={(nextSelectedOrder) =>
+                      void handleSelectedOrderChange(nextSelectedOrder)
+                    }
+                    posts={candidatePosts}
+                  />
                 </ContextPanelGroup>
               ) : null}
 

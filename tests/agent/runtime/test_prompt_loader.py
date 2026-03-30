@@ -31,7 +31,8 @@ def test_runtime_prompt_loader_reads_yaml_config(tmp_path: Path) -> None:
                 '  header: "[Runtime Context]"',
                 '  current_time: "Current Time"',
                 '  session_id: "Session ID"',
-                '  workspace_path: "Workspace Path"',
+                '  workspace_path: "Session Root Path"',
+                '  workspace_data_root: "Workspace Data Root"',
                 '  attachments: "Attachments"',
             ]
         ),
@@ -42,7 +43,8 @@ def test_runtime_prompt_loader_reads_yaml_config(tmp_path: Path) -> None:
 
     assert config.identity.title == "Identity"
     assert config.identity.rules == ["rule one"]
-    assert config.runtime_context.workspace_path == "Workspace Path"
+    assert config.runtime_context.workspace_path == "Session Root Path"
+    assert config.runtime_context.workspace_data_root == "Workspace Data Root"
 
 
 def test_runtime_prompt_loader_raises_for_invalid_yaml_schema(tmp_path: Path) -> None:

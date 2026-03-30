@@ -26,6 +26,7 @@ class RuntimeContextLabels(BaseModel):
     current_time: str
     session_id: str
     workspace_path: str
+    workspace_data_root: str
     attachments: str
 
 

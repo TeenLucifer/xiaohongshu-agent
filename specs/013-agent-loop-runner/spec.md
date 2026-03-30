@@ -7,7 +7,7 @@
 ## 目标
 
 - 建立基于 tool-calling 的 agent loop
-- 固定 `max_iterations = 20`
+- 固定 `max_iterations = 40`
 - 在 run 前执行一次 memory consolidation 检查
 - 在 run 后后台补一次 memory consolidation 检查
 - 在模型返回 tool calls 时执行工具并回灌结果
@@ -39,7 +39,7 @@
 - loop 停止模型贴近 `nanobot`
   - 模型本轮不再返回 tool call，则结束
   - 达到最大轮数，则兜底停止
-- `max_iterations = 20`
+- `max_iterations = 40`
 - 所有 skill 都允许 loop
 - skill 由 agent 基于 skills summary 自主选择
 - run 前固定调用一次 memory consolidation 检查
@@ -102,9 +102,9 @@
 
 ## 最大轮数兜底
 
-当达到 `max_iterations = 20` 且任务仍未完成时，返回固定兜底文本：
+当达到 `max_iterations = 40` 且任务仍未完成时，返回固定兜底文本：
 
-`已达到最大工具调用轮数（20），任务仍未完成。建议将任务拆分后重试。`
+`已达到最大工具调用轮数（40），任务仍未完成。建议将任务拆分后重试。`
 
 ## RunResult.tool_calls
 
@@ -128,7 +128,7 @@
 - run 前会触发一次 memory consolidation 检查
 - run 后会后台补一次 memory consolidation 检查
 - 当模型不再发 tool call 时能正常结束
-- 达到 `max_iterations = 20` 时能兜底停止
+- 达到 `max_iterations = 40` 时能兜底停止
 - 触顶时返回固定兜底文本
 - 工具结果能稳定回灌到消息上下文
 - tool 失败时能以错误结果形式回灌，而不是直接中断整个运行

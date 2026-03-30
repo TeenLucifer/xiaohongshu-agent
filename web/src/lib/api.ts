@@ -51,6 +51,16 @@ export interface WorkspaceContextApiResponse {
   updated_at: string;
 }
 
+export interface SelectedPostsApiResponse {
+  topic_id: string;
+  topic_title: string;
+  items: Array<{
+    post_id: string;
+    manual_order: number;
+  }>;
+  updated_at: string;
+}
+
 export interface TopicListItemApiResponse {
   topic_id: string;
   title: string;
@@ -231,6 +241,20 @@ export async function getWorkspaceContext(
       }))
     }))
   };
+}
+
+export async function updateSelectedPosts(
+  topicId: string,
+  topicTitle: string,
+  postIds: string[]
+): Promise<SelectedPostsApiResponse> {
+  return requestJson<SelectedPostsApiResponse>(`/api/topics/${topicId}/selected-posts`, {
+    method: "PUT",
+    body: JSON.stringify({
+      topic_title: topicTitle,
+      post_ids: postIds
+    })
+  });
 }
 
 export async function resetTopic(topicId: string, topicTitle: string): Promise<WorkspaceApiResponse> {

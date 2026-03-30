@@ -30,6 +30,8 @@ def test_session_defaults_include_uuid_style_id_and_zero_consolidation(tmp_path:
     assert session.workspace_path == tmp_path / "sessions" / session.session_id
     assert session.workspace_path.exists()
     assert session.workspace_path.is_dir()
+    assert (session.workspace_path / "workspace").is_dir()
+    assert (session.workspace_path / "workspace" / "posts").is_dir()
     created_offset = session.created_at.utcoffset()
     updated_offset = session.updated_at.utcoffset()
     assert created_offset is not None
@@ -207,6 +209,8 @@ def test_storage_load_recreates_missing_workspace_directory(tmp_path: Path) -> N
     assert loaded is not None
     assert loaded.workspace_path == workspace_path
     assert loaded.workspace_path.exists()
+    assert (loaded.workspace_path / "workspace").exists()
+    assert (loaded.workspace_path / "workspace" / "posts").exists()
 
 
 def test_session_manager_save_load_list_and_invalidate(tmp_path: Path) -> None:

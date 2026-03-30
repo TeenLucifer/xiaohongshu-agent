@@ -33,6 +33,8 @@ class SessionStorage:
 
         workspace_path = self.get_workspace_path(session_id)
         workspace_path.mkdir(parents=True, exist_ok=True)
+        (workspace_path / "workspace").mkdir(parents=True, exist_ok=True)
+        (workspace_path / "workspace" / "posts").mkdir(parents=True, exist_ok=True)
         return workspace_path
 
     def load(self, session_id: str) -> Session | None:

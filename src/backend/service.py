@@ -26,6 +26,8 @@ from backend.schemas import (
     PatternSummaryContentResponse,
     ResetResponse,
     RunResponse,
+    SelectedPostItemResponse,
+    SelectedPostsResponse,
     SkillListItemResponse,
     SkillsListResponse,
     TopicListItemResponse,
@@ -37,7 +39,12 @@ from backend.schemas import (
 )
 from backend.topic_meta_store import TopicMetaStore
 from backend.topic_store import TopicSessionStore
-from backend.topic_truth_models import CandidatePostRecord, PostDetail
+from backend.topic_truth_models import (
+    PostDetail,
+    PostMetrics,
+    SelectedPostRecord,
+    SelectedPostsDocument,
+)
 from backend.topic_truth_store import SessionWorkspaceStore
 
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
@@ -271,21 +278,27 @@ class BackendAppService:
         topic_title: str,
     ) -> WorkspaceContextResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
-        candidate_document = self._workspace_store.read_candidate_posts(session.session_id)
+        post_details = self._workspace_store.list_post_details(session.session_id)
+        selected_document = self._workspace_store.read_selected_posts(session.session_id)
         pattern_summary = self._workspace_store.read_pattern_summary(session.session_id)
+        selected_items = selected_document.items if selected_document is not None else []
+        selected_by_post_id = {item.post_id: item.manual_order for item in selected_items}
         candidate_posts = []
         updated_at = record.updated_at
 
-        if candidate_document is not None:
+        if post_details:
             candidate_posts = [
-                self._convert_candidate_post(
+                self._convert_post_detail_to_candidate_post(
                     topic_id=topic_id,
-                    session_id=session.session_id,
-                    record=item,
+                    detail=detail,
+                    manual_order=selected_by_post_id.get(detail.post_id),
                 )
-                for item in candidate_document.items
+                for detail in post_details
             ]
-            updated_at = candidate_document.updated_at
+            updated_at = max(updated_at, *(detail.updated_at for detail in post_details))
+
+        if selected_document is not None and selected_document.updated_at > updated_at:
+            updated_at = selected_document.updated_at
 
         if pattern_summary is not None and pattern_summary.updated_at > updated_at:
             updated_at = pattern_summary.updated_at
@@ -299,6 +312,58 @@ class BackendAppService:
                 if pattern_summary is not None
                 else None
             ),
+            updated_at=updated_at,
+        )
+
+    def update_selected_posts(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        post_ids: list[str],
+    ) -> SelectedPostsResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        seen: set[str] = set()
+        selected_items: list[SelectedPostRecord] = []
+
+        for post_id in post_ids:
+            normalized_post_id = post_id.strip()
+            if normalized_post_id == "" or normalized_post_id in seen:
+                continue
+            if (
+                self._workspace_store.read_post_detail(session.session_id, normalized_post_id)
+                is None
+            ):
+                continue
+            seen.add(normalized_post_id)
+            selected_items.append(
+                SelectedPostRecord(
+                    post_id=normalized_post_id,
+                    manual_order=len(selected_items) + 1,
+                )
+            )
+
+        updated_at = now_local()
+        self._workspace_store.write_selected_posts(
+            session.session_id,
+            SelectedPostsDocument(
+                items=selected_items,
+                updated_at=updated_at,
+            ),
+        )
+        record.updated_at = updated_at
+        self._topic_store.save(record)
+        self._sync_topic_meta(record, description=None)
+        return SelectedPostsResponse(
+            topic_id=record.topic_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            items=[
+                SelectedPostItemResponse(
+                    post_id=item.post_id,
+                    manual_order=item.manual_order,
+                )
+                for item in selected_items
+            ],
             updated_at=updated_at,
         )
 
@@ -462,63 +527,65 @@ class BackendAppService:
             agent_name=agent_name,
         )
 
-    def _convert_candidate_post(
+    def _convert_post_detail_to_candidate_post(
         self,
         *,
         topic_id: str,
-        session_id: str,
-        record: CandidatePostRecord,
+        detail: PostDetail,
+        manual_order: int | None,
     ) -> CandidatePostContextResponse:
-        detail = self._workspace_store.read_post_detail(session_id, record.post_id)
-        body_text = detail.content.text if detail is not None else record.excerpt
-        image_url = self._resolve_candidate_image_url(
-            topic_id=topic_id,
-            session_id=session_id,
-            record=record,
-            detail=detail,
-        )
+        body_text = detail.content.text
+        image_url = self._resolve_candidate_image_url(topic_id=topic_id, detail=detail)
         return CandidatePostContextResponse(
-            id=record.post_id,
-            title=record.title,
-            excerpt=record.excerpt,
+            id=detail.post_id,
+            title=detail.title,
+            excerpt=_build_excerpt(body_text),
             bodyText=body_text,
-            author=record.author or "未知作者",
-            heat=_format_heat(record),
-            sourceUrl=record.source_url or "",
+            author=(
+                detail.author.name
+                if detail.author is not None and detail.author.name
+                else "未知作者"
+            ),
+            heat=_format_heat(detail.metrics),
+            sourceUrl=detail.url,
             imageUrl=image_url,
             images=self._build_candidate_images(
                 topic_id=topic_id,
-                record=record,
                 detail=detail,
                 cover_image_url=image_url,
             ),
-            selected=record.selected,
-            manualOrder=record.manual_order,
+            selected=manual_order is not None,
+            manualOrder=manual_order,
         )
 
     def _build_candidate_images(
         self,
         *,
         topic_id: str,
-        record: CandidatePostRecord,
-        detail: PostDetail | None,
+        detail: PostDetail,
         cover_image_url: str,
     ) -> list[CandidatePostImageResponse]:
-        if detail is not None and detail.media:
+        if detail.media:
             return [
                 CandidatePostImageResponse(
                     id=asset.asset_id,
-                    imageUrl=_to_topic_asset_url(topic_id=topic_id, relative_path=asset.path),
-                    alt=f"{record.title} 图片 {asset.order}",
+                    imageUrl=_to_topic_asset_url(
+                        topic_id=topic_id,
+                        relative_path=_to_workspace_asset_path(
+                            post_id=detail.post_id,
+                            relative_path=asset.path,
+                        ),
+                    ),
+                    alt=f"{detail.title} 图片 {asset.order}",
                 )
                 for asset in detail.media
             ]
         if cover_image_url:
             return [
                 CandidatePostImageResponse(
-                    id=f"{record.post_id}-cover",
+                    id=f"{detail.post_id}-cover",
                     imageUrl=cover_image_url,
-                    alt=f"{record.title} 封面图",
+                    alt=f"{detail.title} 封面图",
                 )
             ]
         return []
@@ -527,14 +594,16 @@ class BackendAppService:
         self,
         *,
         topic_id: str,
-        session_id: str,
-        record: CandidatePostRecord,
-        detail: PostDetail | None,
+        detail: PostDetail,
     ) -> str:
-        if record.cover_image_path:
-            return _to_topic_asset_url(topic_id=topic_id, relative_path=record.cover_image_path)
-        if detail is not None and detail.media:
-            return _to_topic_asset_url(topic_id=topic_id, relative_path=detail.media[0].path)
+        if detail.media:
+            return _to_topic_asset_url(
+                topic_id=topic_id,
+                relative_path=_to_workspace_asset_path(
+                    post_id=detail.post_id,
+                    relative_path=detail.media[0].path,
+                ),
+            )
         return ""
 
 
@@ -542,17 +611,31 @@ def _format_message_time(value: datetime) -> str:
     return value.strftime("%H:%M")
 
 
-def _format_heat(record: CandidatePostRecord) -> str:
-    if record.heat is None:
-        return ""
+def _format_heat(metrics: PostMetrics) -> str:
     parts: list[str] = []
-    if record.heat.favorites is not None:
-        parts.append(f"收藏 {record.heat.favorites}")
-    if record.heat.likes is not None:
-        parts.append(f"点赞 {record.heat.likes}")
-    if record.heat.comments is not None:
-        parts.append(f"评论 {record.heat.comments}")
+    if metrics.favorites is not None:
+        parts.append(f"收藏 {metrics.favorites}")
+    if metrics.likes is not None:
+        parts.append(f"点赞 {metrics.likes}")
+    if metrics.comments is not None:
+        parts.append(f"评论 {metrics.comments}")
     return " · ".join(parts)
+
+
+def _build_excerpt(text: str, *, max_length: int = 72) -> str:
+    normalized = " ".join(text.split()).strip()
+    if len(normalized) <= max_length:
+        return normalized
+    return f"{normalized[:max_length].rstrip()}..."
+
+
+def _to_workspace_asset_path(*, post_id: str, relative_path: str) -> str:
+    normalized = relative_path.replace("\\", "/").lstrip("/")
+    if normalized.startswith("posts/"):
+        return normalized
+    if normalized.startswith("assets/"):
+        return f"posts/{post_id}/{normalized}"
+    return f"posts/{post_id}/assets/{normalized}"
 
 
 def _to_topic_asset_url(*, topic_id: str, relative_path: str) -> str:

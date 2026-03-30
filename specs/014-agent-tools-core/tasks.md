@@ -11,6 +11,9 @@
 - [x] 固定文件系统权限边界，将路径限制在 session 工作目录、临时目录和 skill 目录内，并默认放开项目根目录 `skills/`。
 - [x] 完成 `exec` 工具、allowlist、deny guard、workspace 越界拦截和默认超时策略，并明确仅通过 `working_dir` 切目录。
 - [x] 统一工具层参数校验、错误表达与输出截断行为。
+- [x] `write_file` 已支持两类输入：
+  - 文本字符串原样写入
+  - `dict/list` 自动序列化为 JSON 文件
 
 ## 当前待办
 

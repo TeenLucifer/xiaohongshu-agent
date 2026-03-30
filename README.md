@@ -43,12 +43,15 @@
 - topic 列表、创建、删除与真实路由
 - 右侧 `candidatePosts` / `patternSummary` 与后端真实数据打通
 - 候选帖子详情多图翻页
+- xhs 图文帖子搜索、详情获取与标准帖子包下载链路
+- `xhs-research-ingest` 通用帖子下载 skill
+- 开发态 web trace 与宿主机浏览器联调路径
 
 当前还没有正式落地：
 
 - 更完整的右侧工作区真实化
 - 面向产品体验的流式输出
-- 更深入的 xhs 任务执行链路
+- 更完整的总结、文案改写与图片生成链路
 
 也就是说，这个仓库现在更像一个“已可前后端联调的 Agent 工作台”，但仍然不是一个已经完工的全栈产品。
 
@@ -73,6 +76,10 @@
 - `data/topic-index.json` 保存 `topic_id -> session_id` 轻量索引
 - topic 元数据、session 历史、memory 与 workspace 数据落在 `data/sessions/<session_id>/`
 - 目录下按对象拆分小文件
+- session 创建时会预建 `workspace/` 与 `workspace/posts/`
+- runtime context 会显式提供：
+  - `Session Root Path`
+  - `Workspace Data Root`
 
 ## 技术方向
 
@@ -195,10 +202,13 @@ curl -X POST "http://127.0.0.1:8000/api/topics/topic-demo/runs" \
 - [x] 前端“新话题”首页入口已落地
 - [x] 前端 Skills 页面已落地
 - [x] 右侧工作区与后端对接：`candidatePosts` / `patternSummary` 已接通
-- [ ] 真实 xhs 任务与 agent 联调：发散搜索、帖子阅读、帖子下载（`017`）
+- [x] 真实 xhs 任务与 agent 联调：图文帖子搜索、详情获取、标准帖子包下载（`017`）
 - [ ] 支持 md 格式展示：聊天消息、skill显示
 - [ ] 流式输出
+- [ ] 总结、文案改写、图片生成的真实结果链路
 - [ ] 前端“设置”页面实现
+- [ ] 前端工作区折叠弹出无动画 bug
+- [ ] 前端对话有空消息 bug
 - [ ] 提示词调优，路径约束单独一部分，角色定义
 - [ ] 前端“新话题”页面视觉调优
 - [ ] 前端对话调优，工具结果可以显示摘要

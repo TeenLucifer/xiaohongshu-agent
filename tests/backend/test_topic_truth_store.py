@@ -18,6 +18,7 @@ from backend.topic_truth_models import (
     PostMediaAsset,
     PostMetrics,
     PostSource,
+    SelectedPostRecord,
     SelectedPostsDocument,
     TopicMeta,
 )
@@ -64,10 +65,11 @@ def test_candidate_and_selected_posts_round_trip(tmp_path: Path) -> None:
         manual_order=None,
         updated_at=now,
     )
-    selected = candidate.model_copy(update={"selected": True, "manual_order": 1})
-
     candidate_doc = CandidatePostsDocument(items=[candidate], updated_at=now)
-    selected_doc = SelectedPostsDocument(items=[selected], updated_at=now)
+    selected_doc = SelectedPostsDocument(
+        items=[SelectedPostRecord(post_id="xhs-1", manual_order=1)],
+        updated_at=now,
+    )
 
     store.write_candidate_posts("session-demo", candidate_doc)
     store.write_selected_posts("session-demo", selected_doc)

@@ -18,8 +18,8 @@ from agent.skills.loader import SkillsLoader
 from agent.tools.registry import ToolDefinition, ToolsRegistry
 from agent.trace import TraceSink
 
-MAX_ITERATIONS = 20
-MAX_ITERATIONS_FALLBACK_TEXT = "已达到最大工具调用轮数（20），任务仍未完成。建议将任务拆分后重试。"
+MAX_ITERATIONS = 40
+MAX_ITERATIONS_FALLBACK_TEXT = "已达到最大工具调用轮数（40），任务仍未完成。建议将任务拆分后重试。"
 SUMMARY_MAX_LENGTH = 200
 
 
