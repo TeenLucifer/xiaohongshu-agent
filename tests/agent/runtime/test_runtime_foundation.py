@@ -75,6 +75,9 @@ def test_runtime_initializes_with_fixed_components(tmp_path: Path) -> None:
     assert runtime.skills_loader is not None
     assert runtime.tools_registry is not None
     assert runtime.loop_runner is not None
+    assert "persist_xhs_posts" in {
+        tool.name for tool in runtime.tools_registry.list_tool_definitions()
+    }
 
 
 def test_create_session_generates_session_id_and_workspace_path(tmp_path: Path) -> None:
@@ -111,6 +114,12 @@ def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> 
     assert "执行命令时不要使用 cd、&&、ls、cat" in prompt
     assert "只能通过 exec.working_dir" in prompt
     assert "不要在当前 session workspace 中直接执行" in prompt
+    assert "专为小红书调研与内容运营设计的助手 runtime" in prompt
+    assert "应先使用 xhs-explore 搜索" in prompt
+    assert "--note-type 图文" in prompt
+    assert "Top 3 篇图文帖子获取详情" in prompt
+    assert "视频帖子，首版应直接跳过" in prompt
+    assert "调用 persist_xhs_posts" in prompt
     assert "当前允许访问的目录包括：" in prompt
     assert f"- {tmp_path / 'data' / 'sessions' / 'sess-1'}" in prompt
     assert f"- {tmp_path / 'skills'}" in prompt

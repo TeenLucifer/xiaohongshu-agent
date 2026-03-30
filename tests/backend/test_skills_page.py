@@ -91,6 +91,7 @@ def make_client(tmp_path: Path) -> AsyncClient:
         project_root=tmp_path,
         data_root=tmp_path / "data",
         allowed_origins=["http://127.0.0.1:5173"],
+        trace_mode="off",
     )
     transport = ASGITransport(app=app)
     return AsyncClient(transport=transport, base_url="http://testserver")

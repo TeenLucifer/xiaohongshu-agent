@@ -15,6 +15,7 @@ from agent.session.manager import SessionManager
 from agent.session.models import SessionSnapshot
 from agent.skills.loader import SkillsLoader
 from agent.tools.registry import ToolsRegistry
+from agent.tools.xhs_persist import PersistXhsPostsTool
 from agent.trace import TraceSink
 
 
@@ -43,6 +44,9 @@ class AgentRuntime:
         self.context_builder = context_builder or ContextBuilder(project_root)
         self.skills_loader = skills_loader or SkillsLoader()
         self.tools_registry = tools_registry or ToolsRegistry()
+        self.tools_registry.register(
+            PersistXhsPostsTool(project_root=self.project_root, data_root=self.data_root)
+        )
         self.provider_config = provider_config
         self.model_client = model_client
         self.loop_runner = loop_runner or LoopRunner(model_client=model_client)

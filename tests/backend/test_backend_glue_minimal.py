@@ -51,6 +51,7 @@ def make_client(tmp_path: Path) -> AsyncClient:
         project_root=tmp_path,
         data_root=tmp_path / "data",
         allowed_origins=["http://127.0.0.1:5173"],
+        trace_mode="off",
     )
     transport = ASGITransport(app=app)
     return AsyncClient(transport=transport, base_url="http://testserver")
@@ -208,6 +209,42 @@ def test_run_returns_messages_and_filters_tool_messages(tmp_path: Path) -> None:
     assert [message["role"] for message in payload["messages"]] == ["user", "agent"]
     assert payload["messages"][0]["text"] == "帮我总结一下"
     assert payload["messages"][1]["text"] == "后端测试回复：帮我总结一下"
+    assert payload["trace_file"] is None
+
+
+def test_run_returns_trace_file_and_writes_session_trace_when_enabled(tmp_path: Path) -> None:
+    async def run() -> dict[str, Any]:
+        runtime = AgentRuntime(
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            model_client=StubModelClient(),
+        )
+        app = create_app(
+            runtime=runtime,
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            allowed_origins=["http://127.0.0.1:5173"],
+            trace_mode="full",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/api/topics/topic-1/runs",
+                json={
+                    "topic_title": "话题一",
+                    "user_input": "帮我总结一下",
+                },
+            )
+            assert response.status_code == 200
+            return cast(dict[str, Any], response.json())
+
+    payload = asyncio.run(run())
+    trace_path = Path(cast(str, payload["trace_file"]))
+    assert trace_path.exists()
+    content = trace_path.read_text(encoding="utf-8")
+    assert "trace_mode: full" in content
+    assert "final_text:" in content
+    assert "后端测试回复：帮我总结一下" in content
 
 
 def test_messages_endpoint_returns_current_session_messages(tmp_path: Path) -> None:

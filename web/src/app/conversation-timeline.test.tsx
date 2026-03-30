@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { vi } from "vitest";
 import { AppRoutes } from "./routes";
 
 async function renderWorkspace(): Promise<ReturnType<typeof render>> {
@@ -29,6 +30,7 @@ describe("conversation timeline feature", () => {
 
   it("keeps message layout lightweight and allows sending a new message", async () => {
     const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
     await renderWorkspace();
 
     await user.type(screen.getByLabelText("对话输入框"), "继续给我两版标题");
@@ -36,5 +38,14 @@ describe("conversation timeline feature", () => {
 
     expect(await screen.findByText("继续给我两版标题")).toBeInTheDocument();
     expect(await screen.findByText(/后端 API mock 已收到：继续给我两版标题/)).toBeInTheDocument();
+    expect(
+      fetchSpy.mock.calls.some((call) => {
+        const input = call[0];
+        const url =
+          typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        return url.includes("/api/topics/topic-spring-commute/context");
+      })
+    ).toBe(true);
+    fetchSpy.mockRestore();
   });
 });

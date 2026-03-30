@@ -89,6 +89,7 @@ class RunResponse(BaseModel):
     messages: list[MessageResponse] = Field(default_factory=list)
     last_run: LastRunResponse
     updated_at: datetime
+    trace_file: str | None = None
 
 
 class MessagesResponse(BaseModel):

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import mimetypes
+import os
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal, cast
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -13,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
 
 from agent.runtime import AgentRuntime
+from agent.trace import TraceMode
 from backend.schemas import (
     CreateTopicRequestBody,
     ErrorResponse,
@@ -28,6 +30,7 @@ DEFAULT_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:5173",
 ]
+AppTraceMode = Literal["summary", "full", "off"]
 
 
 def create_app(
@@ -36,9 +39,11 @@ def create_app(
     project_root: Path | None = None,
     data_root: Path | None = None,
     allowed_origins: list[str] | None = None,
+    trace_mode: AppTraceMode | None = None,
 ) -> FastAPI:
     resolved_project_root = project_root or Path(__file__).resolve().parents[2]
     resolved_data_root = data_root or (resolved_project_root / "data")
+    resolved_trace_mode = _resolve_trace_mode(trace_mode)
     workspace_store = SessionWorkspaceStore(resolved_data_root)
     topic_store = TopicSessionStore(resolved_data_root)
     topic_meta_store = TopicMetaStore(resolved_data_root)
@@ -51,6 +56,7 @@ def create_app(
         topic_store=topic_store,
         topic_meta_store=topic_meta_store,
         workspace_store=workspace_store,
+        trace_mode=resolved_trace_mode,
     )
 
     app = FastAPI(title="xiaohongshu-agent backend")
@@ -206,6 +212,21 @@ def create_app(
         )
 
     return app
+
+
+def _resolve_trace_mode(explicit_mode: AppTraceMode | None) -> TraceMode | None:
+    if explicit_mode == "off":
+        return None
+    if explicit_mode is not None:
+        return explicit_mode
+    raw_mode = os.getenv("XHS_BACKEND_TRACE_MODE", "").strip().lower()
+    if raw_mode in {"off", "none", "false", "0"}:
+        return None
+    if raw_mode in {"summary", "full"}:
+        return cast(TraceMode, raw_mode)
+
+    environment = os.getenv("XHS_ENV", os.getenv("ENV", "development")).strip().lower()
+    return None if environment == "production" else "full"
 
 
 app = create_app()

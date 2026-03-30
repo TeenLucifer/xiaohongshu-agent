@@ -14,6 +14,7 @@ from agent.runtime import AgentRuntime
 from agent.session.models import Session, SessionMessage
 from agent.skills.loader import SkillRecord
 from agent.time_utils import now_local
+from agent.trace import SessionTraceCollector, TraceMode
 from backend.schemas import (
     CandidatePostContextResponse,
     CandidatePostImageResponse,
@@ -72,11 +73,13 @@ class BackendAppService:
         topic_store: TopicSessionStore,
         topic_meta_store: TopicMetaStore | None = None,
         workspace_store: SessionWorkspaceStore | None = None,
+        trace_mode: TraceMode | None = None,
     ) -> None:
         self._runtime = runtime
         self._topic_store = topic_store
         self._topic_meta_store = topic_meta_store or TopicMetaStore(runtime.data_root)
         self._workspace_store = workspace_store or SessionWorkspaceStore(runtime.data_root)
+        self._trace_mode: TraceMode | None = trace_mode
 
     def list_topics(self) -> TopicListResponse:
         items: list[TopicListItemResponse] = []
@@ -205,14 +208,16 @@ class BackendAppService:
         metadata: dict[str, Any],
     ) -> RunResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        trace_collector = self._build_trace_collector(session=session, user_input=user_input)
         try:
-            result = self._runtime.run(
+            result = self._run_runtime_request(
                 AgentRunRequest(
                     session_id=session.session_id,
                     user_input=user_input,
                     attachments=attachments,
                     metadata=metadata,
-                )
+                ),
+                trace_collector=trace_collector,
             )
         except Exception as exc:  # noqa: BLE001
             raise BackendApiError(
@@ -225,6 +230,16 @@ class BackendAppService:
         record.updated_at = now_local()
         self._topic_store.save(record)
         self._sync_topic_meta(record, description=None)
+        trace_file = (
+            str(
+                trace_collector.write_run_block(
+                    final_text=result.final_text,
+                    artifacts=result.artifacts,
+                )
+            )
+            if trace_collector is not None
+            else None
+        )
         return RunResponse(
             topic_id=record.topic_id,
             topic_title=self._current_topic_title(fresh_session, fallback=topic_title),
@@ -236,6 +251,7 @@ class BackendAppService:
                 artifacts=result.artifacts,
             ),
             updated_at=record.updated_at,
+            trace_file=trace_file,
         )
 
     def get_messages(self, *, topic_id: str, topic_title: str) -> MessagesResponse:
@@ -388,6 +404,43 @@ class BackendAppService:
             if converted is not None:
                 messages.append(converted)
         return messages
+
+    def _build_trace_collector(
+        self,
+        *,
+        session: Session,
+        user_input: str,
+    ) -> SessionTraceCollector | None:
+        if self._trace_mode is None:
+            return None
+        return SessionTraceCollector(
+            session_id=session.session_id,
+            topic=session.topic,
+            workspace_path=session.workspace_path,
+            raw_user_input=user_input,
+            normalized_user_input=user_input,
+            mode=self._trace_mode,
+        )
+
+    def _run_runtime_request(
+        self,
+        request: AgentRunRequest,
+        *,
+        trace_collector: SessionTraceCollector | None,
+    ) -> Any:
+        previous_runtime_sink = getattr(self._runtime, "_trace_sink", None)
+        loop_runner = getattr(self._runtime, "loop_runner", None)
+        previous_loop_sink = getattr(loop_runner, "trace_sink", None)
+        if trace_collector is not None:
+            self._runtime._trace_sink = trace_collector
+            if loop_runner is not None and hasattr(loop_runner, "trace_sink"):
+                loop_runner.trace_sink = trace_collector
+        try:
+            return self._runtime.run(request)
+        finally:
+            self._runtime._trace_sink = previous_runtime_sink
+            if loop_runner is not None and hasattr(loop_runner, "trace_sink"):
+                loop_runner.trace_sink = previous_loop_sink
 
     @staticmethod
     def _convert_message(

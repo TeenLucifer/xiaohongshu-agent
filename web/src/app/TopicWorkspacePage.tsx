@@ -167,6 +167,12 @@ export function TopicWorkspacePage(): JSX.Element {
   const topicId = topicIdParam ?? topics[0]?.id ?? "";
   const topic = topics.find((item) => item.id === topicId);
 
+  async function loadWorkspaceContext(nextTopicId: string, nextTopicTitle: string): Promise<void> {
+    const response = await getWorkspaceContext(nextTopicId, nextTopicTitle);
+    setCandidatePosts(response.candidate_posts);
+    setPatternSummary(response.pattern_summary ?? undefined);
+  }
+
   useEffect(() => {
     setExpandedGroups(defaultExpandedGroups);
     setComposerValue("");
@@ -216,11 +222,10 @@ export function TopicWorkspacePage(): JSX.Element {
     }
 
     let cancelled = false;
-    void getWorkspaceContext(topicId, topic.title)
-      .then((response) => {
-        if (!cancelled) {
-          setCandidatePosts(response.candidate_posts);
-          setPatternSummary(response.pattern_summary ?? undefined);
+    void loadWorkspaceContext(topicId, topic.title)
+      .then(() => {
+        if (cancelled) {
+          return;
         }
       })
       .catch(() => {
@@ -279,6 +284,7 @@ export function TopicWorkspacePage(): JSX.Element {
       const response = await runTopic(topicId, topic.title, value);
       setMessages(toChatMessages(response.messages));
       setComposerValue("");
+      await loadWorkspaceContext(topicId, topic.title);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "发送失败";
       setMessagesError(message);
