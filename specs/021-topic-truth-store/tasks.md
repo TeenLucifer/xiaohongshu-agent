@@ -22,19 +22,20 @@
 - [x] 定义 `meta`、`selected_posts`、`pattern_summary`、`copy_draft`、`image_results` 的最小 schema。
 - [x] 定义 `posts/<post_id>/post.json`、`raw.json`、`assets/` 的底层支撑 schema。
 - [x] 实现 workspace 对象读写测试。
-- [x] 定义第一波 `WorkspaceContextResponse`，只包含 `candidate_posts` 与 `pattern_summary`。
+- [x] 定义第一波 `WorkspaceContextResponse`，包含 `candidate_posts`、`pattern_summary` 与 `copy_draft`。
 - [x] 为 `candidate_posts` 详情补充完整图片数组 DTO，支持多图帖子详情翻页。
 - [x] 调整后端从 session workspace store 到右侧 context DTO 的只读转换。
 - [x] 保持右侧 `GET /api/topics/{topic_id}/context` 接口不变，但底层读取来源切换到 active session。
 - [x] 保持资源读取路径不变，但底层资源路径切换到 session workspace。
 - [x] 接通前端 `candidatePosts` 与 `patternSummary` 对新的 session workspace 真实 API 的读取。
-- [x] 保持 `materials`、`collector`、`copyDraft`、`imageResults` 继续使用 mock。
+- [x] 保持 `materials`、`collector`、`imageResults` 继续使用 mock。
 - [x] 将 `candidatePosts` 的后端读取来源改为 `posts/ + selected_posts.json`
 - [x] 移除 `candidate_posts.json` 作为正式真相层文件
 - [x] 为 `selected_posts.json` 增加最小写回链路：加入、移除、顺序调整
+- [x] 接通 `copyDraft` 的真实读取链路，移除前端对 mock 文案的运行时依赖
 
 ## 备注
 
 - `021` 只讨论 workspace 数据结构与存储，不讨论帖子读取/下载执行流程。
-- 第一波右侧真实化覆盖 `candidatePosts` 与 `patternSummary`；其中 `candidatePosts` 已支持最小已选写回。
+- 第一波右侧真实化覆盖 `candidatePosts`、`patternSummary` 与 `copyDraft`；其中 `candidatePosts` 已支持最小已选写回。
 - 详细边界与验收要求以下列文档为准：`spec.md`、`acceptance.md`

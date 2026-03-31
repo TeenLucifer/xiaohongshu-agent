@@ -15,6 +15,7 @@ from agent.time_utils import now_local
 from agent.tools.base import Tool, ToolArguments, ToolDefinition, ToolExecutionContext
 from backend.app import create_app
 from backend.topic_truth_models import (
+    CopyDraftRecord,
     PatternSummaryRecord,
     PostContent,
     PostDetail,
@@ -178,6 +179,15 @@ def seed_session_context(tmp_path: Path, session_id: str) -> None:
             title_patterns=["场景 + 结论"],
             body_patterns=["问题", "拆解"],
             keywords=["CLI", "Agent"],
+            updated_at=now,
+        ),
+    )
+    store.write_copy_draft(
+        session_id,
+        CopyDraftRecord(
+            title="通勤穿搭别乱买，4 件基础款就够了",
+            body="先讲场景，再给公式，最后补一个可直接照搬的版本。",
+            source_summary_version=now.isoformat(),
             updated_at=now,
         ),
     )
@@ -444,6 +454,7 @@ def test_context_endpoint_returns_candidate_posts_and_pattern_summary(tmp_path: 
     )
     assert payload["candidate_posts"][0]["heat"] == "收藏 20 · 点赞 10 · 评论 3"
     assert payload["pattern_summary"]["titlePatterns"] == ["场景 + 结论"]
+    assert payload["copy_draft"]["title"] == "通勤穿搭别乱买，4 件基础款就够了"
 
 
 def test_update_selected_posts_endpoint_persists_selection_order(tmp_path: Path) -> None:

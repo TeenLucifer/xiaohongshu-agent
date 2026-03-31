@@ -10,7 +10,7 @@
 - 固定右侧 workspace 业务对象的最小 schema
 - 固定后端对 workspace 真相对象的读写边界
 - 为后续右侧工作区替换 mock 提供稳定数据来源
-- 第一波只打通 `candidatePosts` 与 `patternSummary` 的真实读取链路
+- 第一波打通 `candidatePosts`、`patternSummary` 与 `copyDraft` 的真实读取链路
 - 候选帖子详情支持为后续多图浏览提供稳定图片数组
 - 固定“全部帖子包 + 已选列表”的分层关系
 
@@ -21,7 +21,7 @@
 - 数据库
 - 搜索索引
 - 复杂任务编排
-- `copyDraft`、`imageResults`、`materials`、`collector` 的本轮真实化
+- `imageResults`、`materials`、`collector` 的本轮真实化
 - 候选帖子选择/排序写回
 - 文案编辑写回
 
@@ -61,9 +61,10 @@
 - 帖子图片/资源复制进当前 session 的 workspace 目录，不只保存外部引用
 - 搜索结果真相来自当前 workspace 下的全部帖子包，不单独维护 `candidate_posts.json`
 - `selected_posts.json` 只保存用户手动选择和顺序，不冗余帖子详情字段
-- 第一波真实化只覆盖：
+- 第一波真实化覆盖：
   - `candidatePosts`
   - `patternSummary`
+  - `copyDraft`
 - 第一波右侧读取链路以只读为主，但 `selected_posts.json` 已支持最小写回交互
 - 进入后续总结、文案、图片等流程时，默认只消费 `selected_posts.json` 对应帖子，不直接消费全部帖子包
 - 右侧 section 标题、状态与 summary 第一波继续沿用前端 mock
@@ -179,9 +180,10 @@
 
 - 从 `SessionWorkspaceStore` 读取右侧 workspace 需要的对象
 - 组装前端可直接消费的最小只读 DTO
-- 第一波只暴露：
+- 第一波暴露：
   - `candidate_posts`
   - `pattern_summary`
+  - `copy_draft`
 - `candidate_posts` 在只读 DTO 中由：
   - `posts/<post_id>/post.json`
   - `selected_posts.json`
@@ -208,10 +210,10 @@
 - 接入真实数据：
   - `candidatePosts`
   - `patternSummary`
+  - `copyDraft`
 - 继续保留 mock：
   - `materials`
   - `collector`
-  - `copyDraft`
   - `imageResults`
 
 ## 读取接口与 DTO
@@ -226,6 +228,7 @@
 - `topic_title`
 - `candidate_posts`
 - `pattern_summary`
+- `copy_draft`
 - `updated_at`
 
 DTO 策略：
@@ -233,6 +236,7 @@ DTO 策略：
 - 尽量贴近现有前端类型
 - `candidate_posts` 贴近前端 `CandidatePost[]`
 - `pattern_summary` 贴近前端 `PatternSummaryContent`
+- `copy_draft` 贴近前端 `CopyDraftContent`
 
 转换约束：
 
@@ -255,6 +259,6 @@ DTO 策略：
 - 单篇帖子 detail/raw/assets 可作为候选帖子详情支撑对象独立读写
 - session workspace 数据层与 session 历史/记忆边界清晰
 - 右侧工作区后续可基于该 session workspace 数据层替换当前 mock 数据
-- 第一波只要求 `candidatePosts` 与 `patternSummary` 可被后端读取并返回给前端
+- 第一波要求 `candidatePosts`、`patternSummary` 与 `copyDraft` 可被后端读取并返回给前端
 - `candidatePosts` 由全部帖子包和 `selected_posts.json` 组装，而不是依赖独立候选文件
 - 多图帖子在候选帖详情场景下可基于 `media[]` 暴露完整图片数组

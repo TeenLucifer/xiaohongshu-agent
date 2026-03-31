@@ -25,7 +25,6 @@ import {
 } from "../lib/api";
 import {
   mockChatMessagesByTopicId,
-  mockCopyDraftByTopicId,
   mockImageTasksByTopicId,
   mockMaterialPreviewByTopicId,
 } from "../data/mockTopics";
@@ -59,6 +58,12 @@ const defaultWorkspaceSections: WorkspaceSection[] = [
   { id: "imageResults", title: "图片", status: "empty", summary: "还没有图片结果。" },
   { id: "conversationTimeline", title: "对话", status: "empty", summary: "还没有会话记录。" },
 ];
+
+const GENERATE_PATTERN_SUMMARY_PROMPT =
+  "请基于当前已选帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。";
+
+const GENERATE_COPY_DRAFT_PROMPT =
+  "请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。";
 
 function buildWorkspaceSections({
   candidatePosts,
@@ -183,13 +188,14 @@ export function TopicWorkspacePage(): JSX.Element {
     const response = await getWorkspaceContext(nextTopicId, nextTopicTitle);
     setCandidatePosts(response.candidate_posts);
     setPatternSummary(response.pattern_summary ?? undefined);
+    setCopyDraft(response.copy_draft ?? undefined);
   }
 
   useEffect(() => {
     setExpandedGroups(defaultExpandedGroups);
     setComposerValue("");
     setMessages([]);
-    setCopyDraft(mockCopyDraftByTopicId[topicId]);
+    setCopyDraft(undefined);
     // candidatePosts / patternSummary 已接真实后端，不再先注入 mock，避免切换 topic 时闪现旧假数据。
     setCandidatePosts([]);
     setPatternSummary(undefined);
@@ -244,6 +250,7 @@ export function TopicWorkspacePage(): JSX.Element {
         if (!cancelled) {
           setCandidatePosts([]);
           setPatternSummary(undefined);
+          setCopyDraft(undefined);
         }
       });
 
@@ -307,8 +314,8 @@ export function TopicWorkspacePage(): JSX.Element {
     );
   }
 
-  async function handleSend(): Promise<void> {
-    const value = composerValue.trim();
+  async function handleSendMessage(rawValue: string): Promise<void> {
+    const value = rawValue.trim();
     if (value.length === 0 || topic === undefined || isSending) {
       return;
     }
@@ -414,6 +421,18 @@ export function TopicWorkspacePage(): JSX.Element {
     } finally {
       setIsSending(false);
     }
+  }
+
+  async function handleSend(): Promise<void> {
+    await handleSendMessage(composerValue);
+  }
+
+  async function handleGeneratePatternSummary(): Promise<void> {
+    await handleSendMessage(GENERATE_PATTERN_SUMMARY_PROMPT);
+  }
+
+  async function handleGenerateCopyDraft(): Promise<void> {
+    await handleSendMessage(GENERATE_COPY_DRAFT_PROMPT);
   }
 
   async function handleDeleteCurrentTopic(): Promise<void> {
@@ -683,6 +702,17 @@ export function TopicWorkspacePage(): JSX.Element {
 
               {sectionsById.patternSummary ? (
                 <ContextPanelGroup
+                  actions={
+                    <Button
+                      disabled={isSending}
+                      onClick={() => void handleGeneratePatternSummary()}
+                      size="sm"
+                      type="button"
+                      variant="subtle"
+                    >
+                      {patternSummary ? "重新生成总结" : "生成总结"}
+                    </Button>
+                  }
                   expanded={expandedGroups.patternSummary}
                   onToggle={() => toggleGroup("patternSummary")}
                   section={sectionsById.patternSummary}
@@ -700,6 +730,17 @@ export function TopicWorkspacePage(): JSX.Element {
 
               {sectionsById.copyDraft ? (
                 <ContextPanelGroup
+                  actions={
+                    <Button
+                      disabled={isSending}
+                      onClick={() => void handleGenerateCopyDraft()}
+                      size="sm"
+                      type="button"
+                      variant="subtle"
+                    >
+                      {copyDraft ? "重新生成文案" : "生成文案"}
+                    </Button>
+                  }
                   expanded={expandedGroups.copyDraft}
                   onToggle={() => toggleGroup("copyDraft")}
                   section={sectionsById.copyDraft}

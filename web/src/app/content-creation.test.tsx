@@ -20,7 +20,7 @@ describe("content creation feature", () => {
   it("renders summary in the main chat column and keeps structured content in the right workspace", async () => {
     await renderWorkspace();
 
-    expect(await screen.findByText(/这批内容的共性很稳定/)).toBeInTheDocument();
+    expect((await screen.findAllByText("标题会先切通勤场景")).length).toBeGreaterThan(0);
     expect(screen.queryByText("已生成一版完整文案，你可以直接在这里修改。")).not.toBeInTheDocument();
     expect(screen.queryByText("标题模式")).not.toBeInTheDocument();
   });
@@ -45,6 +45,7 @@ describe("content creation feature", () => {
       })
     ).toBeInTheDocument();
     expect(within(copyGroup).queryByRole("button", { name: "编辑" })).not.toBeInTheDocument();
+    expect(within(copyGroup).getByRole("button", { name: "重新生成文案" })).toBeInTheDocument();
   });
 
   it("shows copy summary and grouped images in the right workspace", async () => {
@@ -59,6 +60,7 @@ describe("content creation feature", () => {
     await user.click(summaryToggle);
     expect(within(summaryGroup).getByText("标题模式")).toBeInTheDocument();
     expect(within(summaryGroup).getByText("高频关键词")).toBeInTheDocument();
+    expect(within(summaryGroup).getByRole("button", { name: "重新生成总结" })).toBeInTheDocument();
 
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
@@ -73,5 +75,41 @@ describe("content creation feature", () => {
     expect(screen.getByRole("heading", { name: "文生图", level: 3 })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "图生图", level: 3 })).toBeInTheDocument();
     expect(screen.getAllByAltText(/候选图/).length).toBeGreaterThan(0);
+  });
+
+  it("triggers summary and copy runs from the right panel buttons", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        initialEntries={["/topics/topic-small-rental"]}
+      >
+        <AppRoutes />
+      </MemoryRouter>
+    );
+
+    await screen.findByRole("complementary", { name: "右侧面板" });
+
+    const summaryToggle = screen.getByRole("button", { name: "展开总结" });
+    const summaryGroup = summaryToggle.closest("section");
+    if (!(summaryGroup instanceof HTMLElement)) {
+      throw new Error("summary group not found");
+    }
+    await user.click(summaryToggle);
+    await user.click(within(summaryGroup).getByRole("button", { name: "生成总结" }));
+    expect(
+      await screen.findByText("请基于当前已选帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。")
+    ).toBeInTheDocument();
+
+    const copyToggle = screen.getByRole("button", { name: "展开文案" });
+    const copyGroup = copyToggle.closest("section");
+    if (!(copyGroup instanceof HTMLElement)) {
+      throw new Error("copy group not found");
+    }
+    await user.click(copyToggle);
+    await user.click(within(copyGroup).getByRole("button", { name: "生成文案" }));
+    expect(
+      await screen.findByText("请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。")
+    ).toBeInTheDocument();
   });
 });

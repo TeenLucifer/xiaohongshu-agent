@@ -3,6 +3,7 @@ import { beforeEach, vi } from "vitest";
 import {
   mockCandidatePostsByTopicId,
   mockChatMessagesByTopicId,
+  mockCopyDraftByTopicId,
   mockPatternSummaryByTopicId,
   mockTopics
 } from "../data/mockTopics";
@@ -14,6 +15,14 @@ Object.defineProperty(window, "scrollTo", {
 
 let topicStore = mockTopics.map((topic) => ({ ...topic }));
 let candidatePostStore = JSON.parse(JSON.stringify(mockCandidatePostsByTopicId)) as Record<string, typeof mockCandidatePostsByTopicId[string]>;
+let patternSummaryStore = JSON.parse(JSON.stringify(mockPatternSummaryByTopicId)) as Record<
+  string,
+  typeof mockPatternSummaryByTopicId[string] | null
+>;
+let copyDraftStore = JSON.parse(JSON.stringify(mockCopyDraftByTopicId)) as Record<
+  string,
+  typeof mockCopyDraftByTopicId[string] | null
+>;
 let createdTopicCounter = 0;
 const mockSkills = [
   {
@@ -42,6 +51,14 @@ beforeEach(() => {
   candidatePostStore = JSON.parse(JSON.stringify(mockCandidatePostsByTopicId)) as Record<
     string,
     typeof mockCandidatePostsByTopicId[string]
+  >;
+  patternSummaryStore = JSON.parse(JSON.stringify(mockPatternSummaryByTopicId)) as Record<
+    string,
+    typeof mockPatternSummaryByTopicId[string] | null
+  >;
+  copyDraftStore = JSON.parse(JSON.stringify(mockCopyDraftByTopicId)) as Record<
+    string,
+    typeof mockCopyDraftByTopicId[string] | null
   >;
   createdTopicCounter = 0;
 });
@@ -161,7 +178,8 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         topic_id: topicId,
         topic_title: requestUrl.searchParams.get("topic_title") ?? topic.title,
         candidate_posts: candidatePostStore[topicId] ?? [],
-        pattern_summary: mockPatternSummaryByTopicId[topicId] ?? null,
+        pattern_summary: patternSummaryStore[topicId] ?? null,
+        copy_draft: copyDraftStore[topicId] ?? null,
         updated_at: "2026-03-29T10:00:00+08:00"
       }),
       {
@@ -209,6 +227,23 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         ? (JSON.parse(rawBody) as { user_input?: string; topic_title?: string })
         : {};
     const userInput = parsedBody.user_input ?? "";
+    if (userInput === "请基于当前已选帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。") {
+      patternSummaryStore[topicId] = {
+        titlePatterns: ["场景切入 + 明确收益"],
+        bodyPatterns: ["先代入痛点", "再给出公式", "最后强化收藏理由"],
+        keywords: ["通勤", "效率", "基础款", "清单"]
+      };
+    }
+    if (
+      userInput ===
+      "请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。"
+    ) {
+      copyDraftStore[topicId] = {
+        title: "早八通勤穿搭别乱买，4 件基础款就够了",
+        body:
+          "如果你每天早上都在衣柜前发呆，这版思路可以直接照搬。\n\n我把通勤穿搭里最常用的 4 件基础款重新组合了一遍，发现只要把版型和颜色理顺，上班真的会轻松很多。\n\n下面这版公式你可以直接拿去发。"
+      };
+    }
     const userMessage = {
       id: `user-${userInput}`,
       role: "user",
@@ -272,6 +307,23 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         ? (JSON.parse(rawBody) as { user_input?: string; topic_title?: string })
         : {};
     const userInput = parsedBody.user_input ?? "";
+    if (userInput === "请基于当前已选帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。") {
+      patternSummaryStore[topicId] = {
+        titlePatterns: ["场景切入 + 明确收益"],
+        bodyPatterns: ["先代入痛点", "再给出公式", "最后强化收藏理由"],
+        keywords: ["通勤", "效率", "基础款", "清单"]
+      };
+    }
+    if (
+      userInput ===
+      "请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。"
+    ) {
+      copyDraftStore[topicId] = {
+        title: "早八通勤穿搭别乱买，4 件基础款就够了",
+        body:
+          "如果你每天早上都在衣柜前发呆，这版思路可以直接照搬。\n\n我把通勤穿搭里最常用的 4 件基础款重新组合了一遍，发现只要把版型和颜色理顺，上班真的会轻松很多。\n\n下面这版公式你可以直接拿去发。"
+      };
+    }
     const streamPayload = [
       `event: run_started\ndata: ${JSON.stringify({
         type: "run_started",

@@ -27,6 +27,7 @@ from agent.trace import SessionTraceCollector, TraceMode
 from backend.schemas import (
     CandidatePostContextResponse,
     CandidatePostImageResponse,
+    CopyDraftContentResponse,
     CreateTopicResponse,
     DeleteTopicResponse,
     LastRunResponse,
@@ -387,6 +388,7 @@ class BackendAppService:
         post_details = self._workspace_store.list_post_details(session.session_id)
         selected_document = self._workspace_store.read_selected_posts(session.session_id)
         pattern_summary = self._workspace_store.read_pattern_summary(session.session_id)
+        copy_draft = self._workspace_store.read_copy_draft(session.session_id)
         selected_items = selected_document.items if selected_document is not None else []
         selected_by_post_id = {item.post_id: item.manual_order for item in selected_items}
         candidate_posts = []
@@ -408,6 +410,8 @@ class BackendAppService:
 
         if pattern_summary is not None and pattern_summary.updated_at > updated_at:
             updated_at = pattern_summary.updated_at
+        if copy_draft is not None and copy_draft.updated_at > updated_at:
+            updated_at = copy_draft.updated_at
 
         return WorkspaceContextResponse(
             topic_id=record.topic_id,
@@ -416,6 +420,11 @@ class BackendAppService:
             pattern_summary=(
                 PatternSummaryContentResponse.from_record(pattern_summary)
                 if pattern_summary is not None
+                else None
+            ),
+            copy_draft=(
+                CopyDraftContentResponse.from_record(copy_draft)
+                if copy_draft is not None
                 else None
             ),
             updated_at=updated_at,

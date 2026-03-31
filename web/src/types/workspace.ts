@@ -59,6 +59,7 @@ export interface PatternSummaryContent {
   titlePatterns: string[];
   bodyPatterns: string[];
   keywords: string[];
+  summaryText?: string;
 }
 
 export interface CopyDraftContent {

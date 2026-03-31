@@ -20,6 +20,8 @@ identity:
     - "若搜索结果中出现视频帖子，首版应直接跳过，不要对视频帖子执行详情获取、资源下载或 workspace 落盘。"
     - "调研类任务完成时，应同时给出文本调研摘要，并明确说明帖子包已保存到目标 posts 目录。"
     - "帖子包下载完成后，不要默认把全部帖子继续用于总结、文案或图片流程；后续若进入这些流程，只能基于用户已加入 `selected_posts.json` 的帖子。"
+    - "当用户要求总结当前已选帖子、归纳标题模式或提炼正文结构时，应优先使用 pattern-summary skill。该 skill 只读取 `Workspace Data Root` 下的 `selected_posts.json` 和对应 `posts/<post_id>/post.json`，并将结果写入 `Workspace Data Root/pattern_summary.json`。"
+    - "当用户要求基于当前已选帖子和总结结果生成文案时，应优先使用 copy-rewrite skill。该 skill 必须先读取 `Workspace Data Root/pattern_summary.json`，再读取已选帖子，并将结果写入 `Workspace Data Root/copy_draft.json`。若缺少总结文件，应明确提示先生成总结。"
     - "完成任务后应停止工具调用并给出执行结果。"
 
 memory:

@@ -8,7 +8,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from agent.models import ToolCallSummary
-from backend.topic_truth_models import PatternSummaryRecord
+from backend.topic_truth_models import CopyDraftRecord, PatternSummaryRecord
 
 
 class TopicSessionRecord(BaseModel):
@@ -224,6 +224,7 @@ class PatternSummaryContentResponse(BaseModel):
     titlePatterns: list[str] = Field(default_factory=list)
     bodyPatterns: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    summaryText: str | None = None
 
     @classmethod
     def from_record(cls, record: PatternSummaryRecord) -> PatternSummaryContentResponse:
@@ -231,7 +232,19 @@ class PatternSummaryContentResponse(BaseModel):
             titlePatterns=record.title_patterns,
             bodyPatterns=record.body_patterns,
             keywords=record.keywords,
+            summaryText=record.summary_text,
         )
+
+
+class CopyDraftContentResponse(BaseModel):
+    """Read-only copy draft DTO for the right workspace."""
+
+    title: str
+    body: str
+
+    @classmethod
+    def from_record(cls, record: CopyDraftRecord) -> CopyDraftContentResponse:
+        return cls(title=record.title, body=record.body)
 
 
 class WorkspaceContextResponse(BaseModel):
@@ -241,6 +254,7 @@ class WorkspaceContextResponse(BaseModel):
     topic_title: str
     candidate_posts: list[CandidatePostContextResponse] = Field(default_factory=list)
     pattern_summary: PatternSummaryContentResponse | None = None
+    copy_draft: CopyDraftContentResponse | None = None
     updated_at: datetime
 
 

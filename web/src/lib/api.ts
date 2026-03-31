@@ -1,4 +1,10 @@
-import type { CandidatePost, ChatMessage, PatternSummaryContent, TopicCard } from "../types/workspace";
+import type {
+  CandidatePost,
+  ChatMessage,
+  CopyDraftContent,
+  PatternSummaryContent,
+  TopicCard,
+} from "../types/workspace";
 import type { SkillListItem } from "../types/skills";
 
 const DEFAULT_API_BASE_URL = "";
@@ -68,6 +74,7 @@ export interface WorkspaceContextApiResponse {
   topic_title: string;
   candidate_posts: CandidatePost[];
   pattern_summary: PatternSummaryContent | null;
+  copy_draft: CopyDraftContent | null;
   updated_at: string;
 }
 

@@ -109,6 +109,10 @@
   - 本地 Python 调用入口与 smoke harness
 - `017-xhs-research-persist-loop`
   - 小红书调研闭环、Top 3 图文帖子详情采集与标准帖子包下载
+- `018-pattern-summary-skill`
+  - 基于已选帖子生成结构化总结，并写入 `pattern_summary.json`
+- `019-copy-rewrite-skill`
+  - 基于已选帖子与总结结果生成文案，并写入 `copy_draft.json`
 
 ### 后端与集成
 
