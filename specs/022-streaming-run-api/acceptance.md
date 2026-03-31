@@ -33,3 +33,4 @@
 - 当前不覆盖完整 topic 真相层的流式更新
 - 当前不引入复杂任务队列
 - 当前不解决多 worker 分发问题
+- 当前 `assistant_delta` 仍是最终文本的快速分段回放，不是 provider 原生 token 级流式

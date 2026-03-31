@@ -11,7 +11,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from agent.runtime import AgentRuntime
 from agent.trace import TraceMode
@@ -154,6 +154,29 @@ def create_app(
             user_input=payload.user_input,
             attachments=payload.attachments,
             metadata=payload.metadata,
+        )
+
+    @app.post("/api/topics/{topic_id}/runs/stream")
+    async def stream_run_topic(
+        request: Request,
+        topic_id: str,
+        payload: RunRequestBody,
+    ) -> StreamingResponse:
+        stream = request.app.state.backend_service.stream_topic_run(
+            topic_id=topic_id,
+            topic_title=payload.topic_title,
+            user_input=payload.user_input,
+            attachments=payload.attachments,
+            metadata=payload.metadata,
+        )
+        return StreamingResponse(
+            stream,
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
         )
 
     @app.get("/api/topics/{topic_id}/messages")

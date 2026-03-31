@@ -215,7 +215,14 @@ export const mockChatMessagesByTopicId: Record<string, ChatMessage[]> = {
       role: "agent",
       agentName: "帖子搜集 Agent",
       text: "第一轮搜集已经完成。我保留了 4 条相关度更高的候选帖子，右侧搜索结果默认展开，你可以直接点开缩略卡查看详情并决定是否加入已选。",
-      time: "10:18"
+      time: "10:18",
+      toolSummary: [
+        {
+          name: "xhs-explore",
+          argumentsSummary: "{\"keyword\":\"春季通勤穿搭\",\"note_type\":\"图文\"}",
+          resultSummary: "已返回 4 条高相关图文帖子，并完成去重。"
+        }
+      ]
     },
     {
       id: "message-user-summary",
@@ -227,7 +234,8 @@ export const mockChatMessagesByTopicId: Record<string, ChatMessage[]> = {
       id: "message-agent-summary",
       role: "agent",
       agentName: "模式总结 Agent",
-      text: "这批内容的共性很稳定：标题都会先切通勤场景，再给出低门槛解决方案；正文更强调“直接照搬”的效率感，不会讲太多复杂概念，结尾通常会补一个简短清单来提高收藏意愿。",
+      text:
+        "## 这批内容的共性\n\n- 标题会先切通勤场景\n- 再给出低门槛解决方案\n- 结尾常补一个清单来提高收藏意愿\n\n> 正文更强调“直接照搬”的效率感。\n\n| 维度 | 观察 |\n| --- | --- |\n| 标题 | 场景 + 解决方案 |\n| 正文 | 步骤化、可照搬 |\n\n可优先保留 `通勤场景 + 低门槛公式` 这类表达。",
       time: "10:43"
     },
     {

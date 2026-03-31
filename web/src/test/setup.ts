@@ -23,7 +23,8 @@ const mockSkills = [
     location: "/repo/skills/xiaohongshu-skills/skills/xhs-explore/SKILL.md",
     available: true,
     requires: [],
-    content_summary: "先读取 SKILL.md，再执行搜索与帖子查看流程。"
+    content_summary:
+      "## 使用方式\n\n- 先读取 `SKILL.md`\n- 再执行搜索与帖子查看流程\n\n> 适合帖子搜集与详情查看。"
   },
   {
     name: "xhs-auth",
@@ -137,7 +138,12 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
           role: message.role,
           text: message.text,
           time: message.time,
-          agent_name: message.agentName ?? null
+          agent_name: message.agentName ?? null,
+          tool_summary: (message.toolSummary ?? []).map((item) => ({
+            name: item.name,
+            arguments_summary: item.argumentsSummary,
+            result_summary: item.resultSummary,
+          })),
         })),
         updated_at: "2026-03-29T10:00:00+08:00",
         last_run: null
@@ -215,7 +221,14 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
       role: "agent",
       text: `后端 API mock 已收到：${userInput}`,
       time: "刚刚",
-      agent_name: "协作 Agent"
+      agent_name: "协作 Agent",
+      tool_summary: [
+        {
+          name: "xhs-explore",
+          arguments_summary: `{\"keyword\":${JSON.stringify(userInput)}}`,
+          result_summary: "已返回一条运行摘要。"
+        }
+      ]
     };
     return new Response(
       JSON.stringify({
@@ -228,8 +241,13 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
             role: message.role,
             text: message.text,
             time: message.time,
-            agent_name: message.agentName ?? null
-          })) as Array<Record<string, string | null>>),
+            agent_name: message.agentName ?? null,
+            tool_summary: (message.toolSummary ?? []).map((item) => ({
+              name: item.name,
+              arguments_summary: item.argumentsSummary,
+              result_summary: item.resultSummary,
+            })),
+          })) as Array<Record<string, unknown>>),
           userMessage,
           agentMessage
         ],
@@ -245,6 +263,78 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         headers: { "Content-Type": "application/json" }
       }
     );
+  }
+
+  if (path.endsWith("/runs/stream")) {
+    const rawBody = init?.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as { user_input?: string; topic_title?: string })
+        : {};
+    const userInput = parsedBody.user_input ?? "";
+    const streamPayload = [
+      `event: run_started\ndata: ${JSON.stringify({
+        type: "run_started",
+        run_id: "run-test",
+        timestamp: "2026-03-29T10:01:00+08:00",
+        payload: {
+          topic_id: topicId,
+          session_id: `session-${topicId}`,
+        },
+      })}\n\n`,
+      `event: tool_call_started\ndata: ${JSON.stringify({
+        type: "tool_call_started",
+        run_id: "run-test",
+        timestamp: "2026-03-29T10:01:01+08:00",
+        payload: {
+          tool_call_id: "call-1",
+          name: "xhs-explore",
+          arguments_summary: `{\"keyword\":${JSON.stringify(userInput)}}`,
+        },
+      })}\n\n`,
+      `event: tool_call_finished\ndata: ${JSON.stringify({
+        type: "tool_call_finished",
+        run_id: "run-test",
+        timestamp: "2026-03-29T10:01:02+08:00",
+        payload: {
+          tool_call_id: "call-1",
+          name: "xhs-explore",
+          arguments_summary: `{\"keyword\":${JSON.stringify(userInput)}}`,
+          result_summary: "已返回一条运行摘要。",
+        },
+      })}\n\n`,
+      `event: assistant_delta\ndata: ${JSON.stringify({
+        type: "assistant_delta",
+        run_id: "run-test",
+        timestamp: "2026-03-29T10:01:03+08:00",
+        payload: {
+          delta: `后端 API mock 已收到：${userInput}`,
+        },
+      })}\n\n`,
+      `event: run_completed\ndata: ${JSON.stringify({
+        type: "run_completed",
+        run_id: "run-test",
+        timestamp: "2026-03-29T10:01:04+08:00",
+        payload: {
+          topic_id: topicId,
+          topic_title: parsedBody.topic_title ?? topic.title,
+          session_id: `session-${topicId}`,
+          final_text: `后端 API mock 已收到：${userInput}`,
+          tool_calls: [
+            {
+              name: "xhs-explore",
+              arguments_summary: `{\"keyword\":${JSON.stringify(userInput)}}`,
+              result_summary: "已返回一条运行摘要。",
+            },
+          ],
+          artifacts: [],
+        },
+      })}\n\n`,
+    ].join("");
+    return new Response(streamPayload, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" }
+    });
   }
 
   if (path.endsWith("/reset")) {

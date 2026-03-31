@@ -18,18 +18,22 @@
   - 可用状态
   - 缺失依赖
   - `SKILL.md` 去 frontmatter 后的正文摘要
+- Skills 详情弹窗中的正文摘要支持 GFM 基础 Markdown 显示
 
 ## 非目标
 
 - skill 安装、启用、禁用、执行
 - 搜索、筛选、排序、分组
 - 完整 markdown 文档阅读器
+- 原始 HTML 渲染
+- 代码高亮
 - 编辑 `SKILL.md`
 
 ## 用户故事
 
 - 作为运营人员，我希望能快速看到当前系统有哪些 skills 可用，而不必去读源码或 trace。
 - 作为开发者，我希望能直接看到某个 skill 的来源位置、依赖状态和正文摘要，便于调试和联调。
+- 作为使用者，我希望技能正文中的标题、列表、代码块和链接能按 Markdown 结构显示，而不是纯文本堆在一起。
 - 作为使用者，我希望从左侧 `Skills` 入口进入一个独立页面，而不是在工作台里打开临时弹层。
 
 ## 输入输出
@@ -57,6 +61,8 @@
   - `requires`
   - `content_summary`
 - `content_summary` 来自 `SKILL.md` 去 frontmatter 后的正文摘要
+- `content_summary` 在前端按 GFM 基础 Markdown 只读渲染
+- Skills 详情不支持原始 HTML
 - 第一版不单独新增详情接口，列表接口返回弹窗所需信息即可
 - workspace skills 的聚合规则为：
   - 先取 builtin skills
@@ -72,5 +78,6 @@
 - 不可用 skill 不会被过滤掉，并会显示缺失依赖信息
 - 点击 skill 后会打开弹窗
 - 弹窗能显示元数据和正文摘要
+- 弹窗中的正文摘要 Markdown 结构可正确显示
 - Skills 页面不需要搜索、筛选、排序也能完成第一版使用目标
 - 现有首页、话题工作台和左侧导航行为不回归

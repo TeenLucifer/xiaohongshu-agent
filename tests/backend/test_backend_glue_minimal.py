@@ -8,10 +8,11 @@ from typing import Any, cast
 from httpx import ASGITransport, AsyncClient
 
 from agent.loop_runner import LoopModelResponse
-from agent.models import PromptMessage
+from agent.models import PromptMessage, ToolCallPayload
 from agent.runtime import AgentRuntime
+from agent.session.models import SessionMessage
 from agent.time_utils import now_local
-from agent.tools.registry import ToolDefinition
+from agent.tools.base import Tool, ToolArguments, ToolDefinition, ToolExecutionContext
 from backend.app import create_app
 from backend.topic_truth_models import (
     PatternSummaryRecord,
@@ -39,12 +40,73 @@ class StubModelClient:
         return LoopModelResponse(content=f"后端测试回复：{latest_user}")
 
 
+class StreamingToolModelClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def complete(
+        self,
+        *,
+        messages: list[PromptMessage],
+        tool_definitions: list[ToolDefinition],
+        tool_choice: object | None = None,
+    ) -> LoopModelResponse:
+        _ = messages
+        _ = tool_definitions
+        _ = tool_choice
+        if self.calls == 0:
+            self.calls += 1
+            return LoopModelResponse(
+                tool_calls=[
+                    ToolCallPayload(
+                        id="call-1",
+                        name="echo_tool",
+                        arguments={"keyword": "openclaw"},
+                    )
+                ]
+            )
+        return LoopModelResponse(content="流式最终回复：openclaw")
+
+
+class EchoToolArguments(ToolArguments):
+    keyword: str
+
+
+class EchoTool(Tool):
+    name = "echo_tool"
+    description = "Echo one keyword."
+    arguments_model = EchoToolArguments
+
+    def execute(self, *, arguments: ToolArguments, context: ToolExecutionContext) -> object:
+        _ = context
+        parsed = cast(EchoToolArguments, arguments)
+        return {"keyword": parsed.keyword, "status": "ok"}
+
+
 def make_client(tmp_path: Path) -> AsyncClient:
     runtime = AgentRuntime(
         project_root=tmp_path,
         data_root=tmp_path / "data",
         model_client=StubModelClient(),
     )
+    app = create_app(
+        runtime=runtime,
+        project_root=tmp_path,
+        data_root=tmp_path / "data",
+        allowed_origins=["http://127.0.0.1:5173"],
+        trace_mode="off",
+    )
+    transport = ASGITransport(app=app)
+    return AsyncClient(transport=transport, base_url="http://testserver")
+
+
+def make_streaming_client(tmp_path: Path) -> AsyncClient:
+    runtime = AgentRuntime(
+        project_root=tmp_path,
+        data_root=tmp_path / "data",
+        model_client=StreamingToolModelClient(),
+    )
+    runtime.tools_registry.register(EchoTool())
     app = create_app(
         runtime=runtime,
         project_root=tmp_path,
@@ -254,6 +316,99 @@ def test_messages_endpoint_returns_current_session_messages(tmp_path: Path) -> N
 
     payload = asyncio.run(run())
     assert [message["role"] for message in payload["messages"]] == ["user", "agent"]
+
+
+def test_messages_endpoint_returns_only_final_answer_with_tool_summary(tmp_path: Path) -> None:
+    async def run() -> dict[str, Any]:
+        runtime = AgentRuntime(
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            model_client=StubModelClient(),
+        )
+        app = create_app(
+            runtime=runtime,
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            allowed_origins=["http://127.0.0.1:5173"],
+            trace_mode="off",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            first = await client.get(
+                "/api/topics/topic-1/workspace",
+                params={"topic_title": "话题一"},
+            )
+            session_id = cast(str, first.json()["session_id"])
+            session = runtime.session_manager.require(session_id)
+            session.add_message(SessionMessage(role="user", content="请帮我搜集"))
+            session.add_message(
+                SessionMessage(
+                    role="assistant",
+                    content="我先搜索一下",
+                    tool_calls=[
+                        ToolCallPayload(
+                            id="call-1",
+                            name="xhs-explore",
+                            arguments={"keyword": "openclaw", "note_type": "图文"},
+                        )
+                    ],
+                )
+            )
+            session.add_message(
+                SessionMessage(
+                    role="tool",
+                    name="xhs-explore",
+                    tool_call_id="call-1",
+                    content="已返回 3 条帖子",
+                )
+            )
+            session.add_message(SessionMessage(role="assistant", content="最终只保留这 3 条帖子。"))
+            runtime.session_manager.save(session)
+
+            response = await client.get(
+                "/api/topics/topic-1/messages",
+                params={"topic_title": "话题一"},
+            )
+
+            assert response.status_code == 200
+            return cast(dict[str, Any], response.json())
+
+    payload = asyncio.run(run())
+    assert [message["role"] for message in payload["messages"]] == ["user", "agent"]
+    assert payload["messages"][1]["text"] == "最终只保留这 3 条帖子。"
+    assert payload["messages"][1]["tool_summary"] == [
+        {
+            "name": "xhs-explore",
+            "arguments_summary": '{"keyword": "openclaw", "note_type": "图文"}',
+            "result_summary": "已返回 3 条帖子",
+        }
+    ]
+
+
+def test_streaming_run_endpoint_emits_ordered_sse_events(tmp_path: Path) -> None:
+    async def run() -> str:
+        async with make_streaming_client(tmp_path) as client:
+            async with client.stream(
+                "POST",
+                "/api/topics/topic-1/runs/stream",
+                json={
+                    "topic_title": "话题一",
+                    "user_input": "帮我流式执行",
+                },
+            ) as response:
+                assert response.status_code == 200
+                chunks: list[str] = []
+                async for chunk in response.aiter_text():
+                    chunks.append(chunk)
+                return "".join(chunks)
+
+    payload = asyncio.run(run())
+    assert "event: run_started" in payload
+    assert "event: tool_call_started" in payload
+    assert "event: tool_call_finished" in payload
+    assert "event: assistant_delta" in payload
+    assert "event: run_completed" in payload
+    assert "流式最终回复：openclaw" in payload
 
 
 def test_context_endpoint_returns_candidate_posts_and_pattern_summary(tmp_path: Path) -> None:

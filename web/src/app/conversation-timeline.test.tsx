@@ -28,16 +28,44 @@ describe("conversation timeline feature", () => {
     expect(screen.queryByText("输入摘要")).not.toBeInTheDocument();
   });
 
+  it("shows only the final answer while keeping tool calls in a collapsed summary", async () => {
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    expect(screen.queryByText("准备调用工具")).not.toBeInTheDocument();
+    const summaryToggle = await screen.findByText(/工具调用摘要/);
+    expect(summaryToggle).toBeInTheDocument();
+
+    await user.click(summaryToggle);
+
+    expect(await screen.findByText("xhs-explore")).toBeInTheDocument();
+    expect(screen.getByText(/参数：/)).toBeInTheDocument();
+    expect(screen.getByText(/结果：/)).toBeInTheDocument();
+  });
+
+  it("renders agent messages with markdown while keeping user messages as plain text", async () => {
+    await renderWorkspace();
+
+    expect(await screen.findByRole("heading", { name: "这批内容的共性" })).toBeInTheDocument();
+    expect(screen.getByText("标题会先切通勤场景")).toBeInTheDocument();
+    expect(screen.getByText("正文更强调“直接照搬”的效率感。")).toBeInTheDocument();
+    expect(screen.getByText("维度")).toBeInTheDocument();
+    expect(screen.getByText("可优先保留", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("基于我已经选中的帖子，总结一下标题和正文结构，再给我一版完整文案。")).toBeInTheDocument();
+  });
+
   it("keeps message layout lightweight and allows sending a new message", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     await renderWorkspace();
 
-    await user.type(screen.getByLabelText("对话输入框"), "继续给我两版标题");
+    const composer = screen.getByLabelText("对话输入框");
+    await user.type(composer, "继续给我两版标题");
     await user.click(screen.getByRole("button", { name: "发送消息" }));
 
     expect(await screen.findByText("继续给我两版标题")).toBeInTheDocument();
     expect(await screen.findByText(/后端 API mock 已收到：继续给我两版标题/)).toBeInTheDocument();
+    expect(composer).toHaveValue("");
     expect(
       fetchSpy.mock.calls.some((call) => {
         const input = call[0];

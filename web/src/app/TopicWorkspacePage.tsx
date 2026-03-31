@@ -18,6 +18,7 @@ import {
   getWorkspaceContext,
   listTopics,
   runTopic,
+  streamTopicRun,
   toChatMessages,
   toTopicCards,
   updateSelectedPosts,
@@ -33,6 +34,7 @@ import type {
   ChatMessage,
   CopyDraftContent,
   PatternSummaryContent,
+  ToolSummaryItem,
   TopicCard,
   WorkspaceSection,
   WorkspaceSectionId,
@@ -283,21 +285,132 @@ export function TopicWorkspacePage(): JSX.Element {
           ? "248px minmax(520px, 560px) minmax(560px, 1fr)"
           : "248px minmax(520px, 1fr) 72px";
 
+  function appendStreamingToolSummary(
+    items: ToolSummaryItem[],
+    nextItem: ToolSummaryItem
+  ): ToolSummaryItem[] {
+    const existingIndex = items.findIndex((item) => item.id === nextItem.id);
+    if (existingIndex === -1) {
+      return [...items, nextItem];
+    }
+    return items.map((item, index) => (index === existingIndex ? { ...item, ...nextItem } : item));
+  }
+
+  function updateStreamingAgentMessage(
+    messageId: string,
+    updater: (current: ChatMessage) => ChatMessage
+  ): void {
+    setMessages((current) =>
+      current.map((message) =>
+        message.id === messageId && message.role === "agent" ? updater(message) : message
+      )
+    );
+  }
+
   async function handleSend(): Promise<void> {
     const value = composerValue.trim();
     if (value.length === 0 || topic === undefined || isSending) {
       return;
     }
+    const previousMessages = messages;
+    const timestampLabel = "刚刚";
+    const userMessageId = `user-stream:${Date.now()}`;
+    const agentMessageId = `agent-stream:${Date.now()}`;
     setIsSending(true);
     setMessagesError(null);
+    setComposerValue("");
+    setMessages((current) => [
+      ...current,
+      {
+        id: userMessageId,
+        role: "user",
+        text: value,
+        time: timestampLabel,
+      },
+      {
+        id: agentMessageId,
+        role: "agent",
+        text: "",
+        time: timestampLabel,
+        agentName: "协作 Agent",
+        toolSummary: [],
+        status: "streaming",
+      },
+    ]);
     try {
-      const response = await runTopic(topicId, topic.title, value);
-      setMessages(toChatMessages(response.messages));
-      setComposerValue("");
+      await streamTopicRun(topicId, topic.title, value, (event) => {
+        if (event.type === "tool_call_started") {
+          updateStreamingAgentMessage(agentMessageId, (message) => ({
+            ...message,
+            toolSummary: appendStreamingToolSummary(message.toolSummary ?? [], {
+              id: String(event.payload.tool_call_id ?? `${Date.now()}`),
+              name: String(event.payload.name ?? "unknown_tool"),
+              argumentsSummary: String(event.payload.arguments_summary ?? "{}"),
+              resultSummary: "运行中...",
+            }),
+          }));
+          return;
+        }
+        if (event.type === "tool_call_finished") {
+          updateStreamingAgentMessage(agentMessageId, (message) => ({
+            ...message,
+            toolSummary: appendStreamingToolSummary(message.toolSummary ?? [], {
+              id: String(event.payload.tool_call_id ?? `${Date.now()}`),
+              name: String(event.payload.name ?? "unknown_tool"),
+              argumentsSummary: String(event.payload.arguments_summary ?? "{}"),
+              resultSummary: String(event.payload.result_summary ?? ""),
+            }),
+          }));
+          return;
+        }
+        if (event.type === "assistant_delta") {
+          updateStreamingAgentMessage(agentMessageId, (message) => ({
+            ...message,
+            text: message.text + String(event.payload.delta ?? ""),
+          }));
+          return;
+        }
+        if (event.type === "run_completed") {
+          updateStreamingAgentMessage(agentMessageId, (message) => ({
+            ...message,
+            text: String(event.payload.final_text ?? message.text),
+            toolSummary:
+              Array.isArray(event.payload.tool_calls)
+                ? (event.payload.tool_calls as Array<{
+                    name?: string;
+                    arguments_summary?: string;
+                    result_summary?: string;
+                  }>).map((item, index) => ({
+                    id: `${message.id}:tool:${index}`,
+                    name: item.name ?? "unknown_tool",
+                    argumentsSummary: item.arguments_summary ?? "{}",
+                    resultSummary: item.result_summary ?? "",
+                  }))
+                : message.toolSummary,
+            status: "completed",
+          }));
+          return;
+        }
+        if (event.type === "run_failed") {
+          updateStreamingAgentMessage(agentMessageId, (message) => ({
+            ...message,
+            text: String(event.payload.message ?? "运行失败"),
+            status: "failed",
+          }));
+          setMessagesError(String(event.payload.message ?? "运行失败"));
+        }
+      });
       await loadWorkspaceContext(topicId, topic.title);
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "发送失败";
-      setMessagesError(message);
+      setMessages(previousMessages);
+      try {
+        const response = await runTopic(topicId, topic.title, value);
+        setMessages(toChatMessages(response.messages));
+        await loadWorkspaceContext(topicId, topic.title);
+      } catch (fallbackError: unknown) {
+        const message = fallbackError instanceof Error ? fallbackError.message : "发送失败";
+        setMessagesError(message);
+      }
     } finally {
       setIsSending(false);
     }
@@ -467,9 +580,14 @@ export function TopicWorkspacePage(): JSX.Element {
       <motion.aside
         aria-label="右侧面板"
         className="my-4 h-[calc(100vh-2rem)] self-center overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-surface"
+        animate={{
+          opacity: isContextOpen ? 1 : 0.98,
+          x: isContextOpen ? 0 : 6,
+        }}
         data-collapse-direction="right"
         data-state={isContextOpen ? "open" : "collapsed"}
         data-testid="workspace-context-column"
+        transition={{ duration: 0.28, ease: "easeInOut" }}
       >
         <div className="flex h-full flex-col">
           <div
@@ -480,12 +598,16 @@ export function TopicWorkspacePage(): JSX.Element {
             }
           >
             {isContextOpen ? (
-              <div>
+              <motion.div
+                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, x: 14 }}
+                transition={{ duration: 0.16, ease: "easeOut" }}
+              >
                 <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                   Context Panels
                 </p>
                 <h2 className="mt-2 text-lg font-semibold text-slate-900">内容面板</h2>
-              </div>
+              </motion.div>
             ) : (
               <div />
             )}
@@ -506,7 +628,12 @@ export function TopicWorkspacePage(): JSX.Element {
           </div>
 
           {isContextOpen ? (
-            <div className="scrollbar-subtle flex-1 space-y-3 overflow-y-auto px-3 py-3">
+            <motion.div
+              animate={{ opacity: 1, x: 0 }}
+              className="scrollbar-subtle flex-1 space-y-3 overflow-y-auto px-3 py-3"
+              initial={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
               {sectionsById.materials ? (
                 <ContextPanelGroup
                   expanded={expandedGroups.materials}
@@ -594,7 +721,7 @@ export function TopicWorkspacePage(): JSX.Element {
                   <ImageResultsPanel groups={imageGroups} />
                 </ContextPanelGroup>
               ) : null}
-            </div>
+            </motion.div>
           ) : (
             <div className="flex flex-1 items-start justify-end px-3" />
           )}

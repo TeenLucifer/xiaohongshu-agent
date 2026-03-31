@@ -9,6 +9,11 @@ export interface ApiChatMessage {
   text: string;
   time: string;
   agent_name?: string | null;
+  tool_summary?: Array<{
+    name: string;
+    arguments_summary: string;
+    result_summary: string;
+  }>;
 }
 
 export interface ApiLastRun {
@@ -33,6 +38,21 @@ export interface WorkspaceApiResponse {
 export interface RunApiResponse extends WorkspaceApiResponse {
   last_run: ApiLastRun;
   trace_file?: string | null;
+}
+
+export type StreamingRunEventType =
+  | "run_started"
+  | "tool_call_started"
+  | "tool_call_finished"
+  | "assistant_delta"
+  | "run_completed"
+  | "run_failed";
+
+export interface StreamingRunEvent {
+  type: StreamingRunEventType;
+  run_id: string;
+  timestamp: string;
+  payload: Record<string, unknown>;
 }
 
 export interface MessagesApiResponse {
@@ -149,7 +169,12 @@ export function toChatMessages(messages: ApiChatMessage[]): ChatMessage[] {
     role: message.role,
     text: message.text,
     time: message.time,
-    agentName: message.agent_name ?? undefined
+    agentName: message.agent_name ?? undefined,
+    toolSummary: (message.tool_summary ?? []).map((item) => ({
+      name: item.name,
+      argumentsSummary: item.arguments_summary,
+      resultSummary: item.result_summary,
+    })),
   }));
 }
 
@@ -217,9 +242,92 @@ export async function runTopic(
   });
 }
 
+export async function streamTopicRun(
+  topicId: string,
+  topicTitle: string,
+  userInput: string,
+  onEvent: (event: StreamingRunEvent) => void
+): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/api/topics/${topicId}/runs/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      topic_title: topicTitle,
+      user_input: userInput,
+    }),
+  });
+
+  if (!response.ok) {
+    let message = "请求失败";
+    try {
+      const payload = (await response.json()) as ErrorApiResponse;
+      message = payload.message || message;
+    } catch {
+      message = response.statusText || message;
+    }
+    throw new Error(message);
+  }
+
+  if (response.body === null) {
+    throw new Error("流式响应不可用");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done }).replace(/\r\n/g, "\n");
+
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary !== -1) {
+      const rawBlock = buffer.slice(0, boundary).trim();
+      buffer = buffer.slice(boundary + 2);
+      const event = parseStreamingRunEvent(rawBlock);
+      if (event !== null) {
+        onEvent(event);
+      }
+      boundary = buffer.indexOf("\n\n");
+    }
+
+    if (done) {
+      const trailingEvent = parseStreamingRunEvent(buffer.trim());
+      if (trailingEvent !== null) {
+        onEvent(trailingEvent);
+      }
+      break;
+    }
+  }
+}
+
 export async function getMessages(topicId: string, topicTitle: string): Promise<MessagesApiResponse> {
   const params = new URLSearchParams({ topic_title: topicTitle });
   return requestJson<MessagesApiResponse>(`/api/topics/${topicId}/messages?${params.toString()}`);
+}
+
+function parseStreamingRunEvent(rawBlock: string): StreamingRunEvent | null {
+  if (rawBlock.length === 0) {
+    return null;
+  }
+  const lines = rawBlock.split("\n");
+  let eventType: StreamingRunEventType | null = null;
+  const dataLines: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      eventType = line.slice("event:".length).trim() as StreamingRunEventType;
+      continue;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trim());
+    }
+  }
+  if (eventType === null || dataLines.length === 0) {
+    return null;
+  }
+  return JSON.parse(dataLines.join("\n")) as StreamingRunEvent;
 }
 
 export async function getWorkspaceContext(

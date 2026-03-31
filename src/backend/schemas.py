@@ -38,6 +38,22 @@ class RunRequestBody(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class StreamingRunEvent(BaseModel):
+    """SSE event envelope for streaming runs."""
+
+    type: Literal[
+        "run_started",
+        "tool_call_started",
+        "tool_call_finished",
+        "assistant_delta",
+        "run_completed",
+        "run_failed",
+    ]
+    run_id: str
+    timestamp: datetime
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class ResetRequestBody(BaseModel):
     """Request body for reset endpoint."""
 
@@ -66,6 +82,7 @@ class MessageResponse(BaseModel):
     text: str
     time: str
     agent_name: str | None = None
+    tool_summary: list[ToolCallSummary] = Field(default_factory=list)
 
 
 class LastRunResponse(BaseModel):

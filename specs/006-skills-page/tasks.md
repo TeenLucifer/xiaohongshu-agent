@@ -13,7 +13,9 @@
 
 ## 当前待办
 
-- [ ] 当前无进行中的 `006` 子任务；后续如需补搜索、筛选或完整文档阅读，再在此补充。
+- [x] `006-A`：完成 Skills 详情正文 Markdown 渲染
+  详情弹窗中的 `content_summary` 需支持 GFM 基础 Markdown，只读显示，不支持原始 HTML。
+- [x] `006-B`：补齐 Skills 详情 Markdown 渲染测试
 
 ## 备注
 

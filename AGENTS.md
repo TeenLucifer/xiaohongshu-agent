@@ -63,7 +63,8 @@
 - 前端三栏工作台
 - Skills 独立页与技能详情弹窗
 - 话题列表、创建/删除与真实 topic 管理
-- 聊天式主栏与真实后端 run API
+- 聊天式主栏、Markdown 显示、final answer 收口与折叠 tool 摘要
+- 主栏流式 run API 与渐进展示首版
 - Agent Runtime 首版
 - Session / History 子系统
 - Context Memory 子系统
@@ -74,7 +75,6 @@
 当前仍在继续推进的部分：
 
 - 更完整的右侧工作区真实化
-- 流式输出
 - 更深入的 xhs 任务执行能力
 
 所以后续如果进入 agent / 后端阶段，应继续沿 `010+` 和 `020+` 的编号推进，不再把任务堆进 `001~004`。

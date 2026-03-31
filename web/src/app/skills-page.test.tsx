@@ -33,7 +33,10 @@ describe("skills page feature", () => {
 
     expect(within(dialog).getByText("搜索与查看小红书帖子。")).toBeInTheDocument();
     expect(within(dialog).getByText("/repo/skills/xiaohongshu-skills/skills/xhs-explore/SKILL.md")).toBeInTheDocument();
-    expect(within(dialog).getByText("先读取 SKILL.md，再执行搜索与帖子查看流程。")).toBeInTheDocument();
+    expect(within(dialog).getByRole("heading", { name: "使用方式" })).toBeInTheDocument();
+    expect(within(dialog).getByText("先读取", { exact: false })).toBeInTheDocument();
+    expect(within(dialog).getByText("再执行搜索与帖子查看流程", { exact: false })).toBeInTheDocument();
+    expect(within(dialog).getByText("适合帖子搜集与详情查看。")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "关闭 Skills 详情" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

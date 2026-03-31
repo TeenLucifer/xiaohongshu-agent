@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+import queue
 import re
 import secrets
 import shutil
+import threading
+import time
+from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
+from uuid import uuid4
 
 from agent.models import RunRequest as AgentRunRequest
+from agent.models import ToolCallSummary
+from agent.run_events import RunEventSink
 from agent.runtime import AgentRuntime
 from agent.session.models import Session, SessionMessage
 from agent.skills.loader import SkillRecord
@@ -30,6 +39,7 @@ from backend.schemas import (
     SelectedPostsResponse,
     SkillListItemResponse,
     SkillsListResponse,
+    StreamingRunEvent,
     TopicListItemResponse,
     TopicListResponse,
     TopicMetaRecord,
@@ -48,6 +58,7 @@ from backend.topic_truth_models import (
 from backend.topic_truth_store import SessionWorkspaceStore
 
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
+_TOOL_SUMMARY_MAX_LENGTH = 200
 
 _CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -261,6 +272,101 @@ class BackendAppService:
             trace_file=trace_file,
         )
 
+    async def stream_topic_run(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        user_input: str,
+        attachments: list[str],
+        metadata: dict[str, Any],
+    ) -> AsyncIterator[str]:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        trace_collector = self._build_trace_collector(session=session, user_input=user_input)
+        event_queue: queue.Queue[StreamingRunEvent | None] = queue.Queue()
+        run_id = uuid4().hex
+        run_event_sink = _QueueRunEventSink(queue=event_queue, run_id=run_id)
+
+        run_event_sink.emit(
+            event="run_started",
+            payload={
+                "topic_id": record.topic_id,
+                "session_id": record.session_id,
+            },
+        )
+
+        def produce_events() -> None:
+            try:
+                result = self._run_runtime_request(
+                    AgentRunRequest(
+                        session_id=session.session_id,
+                        user_input=user_input,
+                        attachments=attachments,
+                        metadata=metadata,
+                    ),
+                    trace_collector=trace_collector,
+                    run_event_sink=run_event_sink,
+                )
+                fresh_session = self._runtime.session_manager.require(session.session_id)
+                record.updated_at = now_local()
+                self._topic_store.save(record)
+                self._sync_topic_meta(record, description=None)
+                trace_file = (
+                    str(
+                        trace_collector.write_run_block(
+                            final_text=result.final_text,
+                            artifacts=result.artifacts,
+                        )
+                    )
+                    if trace_collector is not None
+                    else None
+                )
+                for chunk in _chunk_assistant_text(result.final_text):
+                    run_event_sink.emit(
+                        event="assistant_delta",
+                        payload={"delta": chunk},
+                    )
+                    time.sleep(0.03)
+
+                run_event_sink.emit(
+                    event="run_completed",
+                    payload={
+                        "topic_id": record.topic_id,
+                        "topic_title": self._current_topic_title(
+                            fresh_session, fallback=topic_title
+                        ),
+                        "session_id": record.session_id,
+                        "final_text": result.final_text,
+                        "tool_calls": [
+                            item.model_dump(mode="json") for item in result.tool_calls
+                        ],
+                        "artifacts": list(result.artifacts),
+                        "trace_file": trace_file,
+                    },
+                )
+            except Exception as exc:  # noqa: BLE001
+                run_event_sink.emit(
+                    event="run_failed",
+                    payload={"message": f"Agent 运行失败：{exc}"},
+                )
+            finally:
+                event_queue.put(None)
+
+        producer = threading.Thread(target=produce_events, daemon=True)
+        producer.start()
+        try:
+            while True:
+                try:
+                    event = event_queue.get_nowait()
+                except queue.Empty:
+                    await asyncio.sleep(0.02)
+                    continue
+                if event is None:
+                    break
+                yield _format_sse_event(event)
+        finally:
+            producer.join(timeout=0.1)
+
     def get_messages(self, *, topic_id: str, topic_title: str) -> MessagesResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
         return MessagesResponse(
@@ -464,10 +570,55 @@ class BackendAppService:
 
     def _build_messages(self, session: Session) -> list[MessageResponse]:
         messages: list[MessageResponse] = []
+        pending_tool_calls: dict[str, tuple[int, str, dict[str, Any]]] = {}
+        pending_tool_summaries: list[ToolCallSummary] = []
+
         for index, message in enumerate(session.messages):
-            converted = self._convert_message(session.session_id, index, message)
-            if converted is not None:
-                messages.append(converted)
+            if message.role == "user":
+                pending_tool_calls = {}
+                pending_tool_summaries = []
+                messages.append(
+                    MessageResponse(
+                        id=f"{session.session_id}:{index}",
+                        role="user",
+                        text=message.content,
+                        time=_format_message_time(message.timestamp),
+                    )
+                )
+                continue
+
+            if message.role == "assistant":
+                if message.tool_calls:
+                    for tool_index, tool_call in enumerate(message.tool_calls):
+                        key = tool_call.id or f"{index}:{tool_index}:{tool_call.name}"
+                        pending_tool_calls[key] = (
+                            tool_index,
+                            tool_call.name,
+                            tool_call.arguments,
+                        )
+                    continue
+
+                messages.append(
+                    MessageResponse(
+                        id=f"{session.session_id}:{index}",
+                        role="agent",
+                        text=message.content,
+                        time=_format_message_time(message.timestamp),
+                        agent_name=message.name or "协作 Agent",
+                        tool_summary=pending_tool_summaries.copy(),
+                    )
+                )
+                pending_tool_calls = {}
+                pending_tool_summaries = []
+                continue
+
+            if message.role == "tool":
+                pending_tool_summaries.append(
+                    _build_tool_summary(
+                        pending_tool_calls=pending_tool_calls,
+                        tool_message=message,
+                    )
+                )
         return messages
 
     def _build_trace_collector(
@@ -492,40 +643,30 @@ class BackendAppService:
         request: AgentRunRequest,
         *,
         trace_collector: SessionTraceCollector | None,
+        run_event_sink: RunEventSink | None = None,
     ) -> Any:
         previous_runtime_sink = getattr(self._runtime, "_trace_sink", None)
+        previous_runtime_run_event_sink = getattr(self._runtime, "_run_event_sink", None)
         loop_runner = getattr(self._runtime, "loop_runner", None)
         previous_loop_sink = getattr(loop_runner, "trace_sink", None)
+        previous_loop_run_event_sink = getattr(loop_runner, "run_event_sink", None)
         if trace_collector is not None:
             self._runtime._trace_sink = trace_collector
             if loop_runner is not None and hasattr(loop_runner, "trace_sink"):
                 loop_runner.trace_sink = trace_collector
+        if run_event_sink is not None:
+            self._runtime._run_event_sink = run_event_sink
+            if loop_runner is not None and hasattr(loop_runner, "run_event_sink"):
+                loop_runner.run_event_sink = run_event_sink
         try:
             return self._runtime.run(request)
         finally:
             self._runtime._trace_sink = previous_runtime_sink
+            self._runtime._run_event_sink = previous_runtime_run_event_sink
             if loop_runner is not None and hasattr(loop_runner, "trace_sink"):
                 loop_runner.trace_sink = previous_loop_sink
-
-    @staticmethod
-    def _convert_message(
-        session_id: str,
-        index: int,
-        message: SessionMessage,
-    ) -> MessageResponse | None:
-        if message.role == "tool":
-            return None
-        role = "user" if message.role == "user" else "agent"
-        agent_name = message.name if role == "agent" else None
-        if role == "agent" and agent_name is None:
-            agent_name = "协作 Agent"
-        return MessageResponse(
-            id=f"{session_id}:{index}",
-            role=role,
-            text=message.content,
-            time=_format_message_time(message.timestamp),
-            agent_name=agent_name,
-        )
+            if loop_runner is not None and hasattr(loop_runner, "run_event_sink"):
+                loop_runner.run_event_sink = previous_loop_run_event_sink
 
     def _convert_post_detail_to_candidate_post(
         self,
@@ -611,6 +752,41 @@ def _format_message_time(value: datetime) -> str:
     return value.strftime("%H:%M")
 
 
+def _build_tool_summary(
+    *,
+    pending_tool_calls: dict[str, tuple[int, str, dict[str, Any]]],
+    tool_message: SessionMessage,
+) -> ToolCallSummary:
+    tool_call_id = tool_message.tool_call_id
+    if tool_call_id is not None and tool_call_id in pending_tool_calls:
+        _, name, arguments = pending_tool_calls.pop(tool_call_id)
+    else:
+        name = tool_message.name or "unknown_tool"
+        arguments = {}
+
+    return ToolCallSummary(
+        name=name,
+        arguments_summary=_summarize_tool_arguments(arguments),
+        result_summary=_summarize_tool_result(tool_message.content),
+    )
+
+
+def _summarize_tool_arguments(arguments: dict[str, Any]) -> str:
+    if not arguments:
+        return "{}"
+    return _truncate_tool_summary(json.dumps(arguments, ensure_ascii=False, sort_keys=True))
+
+
+def _summarize_tool_result(result: str) -> str:
+    return _truncate_tool_summary(result)
+
+
+def _truncate_tool_summary(value: str, *, max_length: int = _TOOL_SUMMARY_MAX_LENGTH) -> str:
+    if len(value) <= max_length:
+        return value
+    return value[: max_length - 3] + "..."
+
+
 def _format_heat(metrics: PostMetrics) -> str:
     parts: list[str] = []
     if metrics.favorites is not None:
@@ -672,3 +848,53 @@ def _generate_topic_id() -> str:
     randomness = int.from_bytes(secrets.token_bytes(10), "big")
     ulid = f"{_encode_crockford(timestamp_ms, 10)}{_encode_crockford(randomness, 16)}"
     return f"topic_{ulid}"
+
+
+class _QueueRunEventSink:
+    """Bridge sync runtime events into one async SSE queue."""
+
+    def __init__(
+        self,
+        *,
+        queue: queue.Queue[StreamingRunEvent | None],
+        run_id: str,
+    ) -> None:
+        self._queue = queue
+        self._run_id = run_id
+
+    def emit(
+        self,
+        *,
+        event: str,
+        payload: dict[str, Any],
+    ) -> None:
+        envelope = StreamingRunEvent(
+            type=cast(
+                Literal[
+                    "run_started",
+                    "tool_call_started",
+                    "tool_call_finished",
+                    "assistant_delta",
+                    "run_completed",
+                    "run_failed",
+                ],
+                event,
+            ),
+            run_id=self._run_id,
+            timestamp=now_local(),
+            payload=payload,
+        )
+        self._queue.put(envelope)
+
+
+def _format_sse_event(event: StreamingRunEvent) -> str:
+    return (
+        f"event: {event.type}\n"
+        f"data: {json.dumps(event.model_dump(mode='json'), ensure_ascii=False)}\n\n"
+    )
+
+
+def _chunk_assistant_text(text: str, *, chunk_size: int = 48) -> list[str]:
+    if text == "":
+        return [""]
+    return [text[index : index + chunk_size] for index in range(0, len(text), chunk_size)]

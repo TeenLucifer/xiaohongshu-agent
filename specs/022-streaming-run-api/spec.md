@@ -78,9 +78,12 @@
 
 ## 传输方式
 
-- 首版允许在实现阶段选择最薄、最常规的流式传输方式
-- specs 当前不把具体传输框架或实现库写死
-- 但必须满足：
+- 首版固定使用 `text/event-stream`（SSE 事件格式）
+- 浏览器侧默认走流式接口；流式失败时允许回退同步 `POST /runs`
+- 由于当前 provider 还没有原生 token streaming：
+  - `tool_call_started` / `tool_call_finished` 保持真实实时
+  - `assistant_delta` 首版采用最终文本的快速分段回放
+- 但仍必须满足：
   - 浏览器端可消费
   - 单次 run 的事件顺序稳定
   - 失败与关闭语义清晰

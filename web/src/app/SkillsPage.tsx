@@ -1,6 +1,7 @@
 import { Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { WorkspaceSidebar } from "../components/WorkspaceSidebar";
+import { MarkdownContent } from "../components/MarkdownContent";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Surface } from "../components/ui/Surface";
@@ -179,9 +180,10 @@ export function SkillsPage(): JSX.Element {
 
               <Surface className="mt-6 rounded-[24px] bg-slate-50/80 p-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">正文摘要</p>
-                <pre className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">
-                  {selectedSkill.contentSummary || "当前没有可展示的正文摘要。"}
-                </pre>
+                <MarkdownContent
+                  className="mt-3 text-sm"
+                  content={selectedSkill.contentSummary || "当前没有可展示的正文摘要。"}
+                />
               </Surface>
             </div>
           </div>

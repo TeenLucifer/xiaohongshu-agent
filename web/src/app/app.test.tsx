@@ -86,8 +86,8 @@ describe("topic workspace feature", () => {
     expect(shell).toHaveAttribute("data-state", "open");
     expect(shell).toHaveAttribute("data-grid-columns", "248px minmax(520px, 560px) minmax(560px, 1fr)");
     expect(contextColumn).toHaveAttribute("data-state", "open");
-    expect(screen.getByText("内容面板")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "搜索结果", level: 2 })).toBeInTheDocument();
+    expect(await screen.findByText("内容面板")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "搜索结果", level: 2 })).toBeInTheDocument();
   });
 
   it("collapses and expands the left sidebar while keeping the main workspace available", async () => {

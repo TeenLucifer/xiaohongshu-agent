@@ -3,6 +3,7 @@ import { Bot, PencilLine, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "../lib/cn";
 import type { ChatMessage, CopyDraftContent } from "../types/workspace";
+import { MarkdownContent } from "./MarkdownContent";
 import { Button } from "./ui/Button";
 
 export function AgentTimeline({
@@ -103,8 +104,36 @@ export function AgentTimeline({
                   )}
                 </div>
               ) : (
-                <p className="mt-2 whitespace-pre-wrap text-[14px] leading-7">{message.text}</p>
+                isUser ? (
+                  <p className="mt-2 whitespace-pre-wrap text-[14px] leading-7">{message.text}</p>
+                ) : (
+                  <MarkdownContent className="mt-2" content={message.text} />
+                )
               )}
+
+              {!isUser && (message.toolSummary?.length ?? 0) > 0 ? (
+                <details className="mt-3 rounded-2xl border border-slate-200/80 bg-slate-50/80 px-3 py-2">
+                  <summary className="cursor-pointer list-none text-[12px] font-medium text-slate-500 [&::-webkit-details-marker]:hidden">
+                    工具调用摘要（{message.toolSummary?.length ?? 0}）
+                  </summary>
+                  <div className="mt-3 grid gap-2">
+                    {message.toolSummary?.map((item, itemIndex) => (
+                      <article
+                        className="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-[12px] leading-6 text-slate-600"
+                        key={`${message.id}:tool:${item.name}:${itemIndex}`}
+                      >
+                        <p className="font-semibold text-slate-900">{item.name}</p>
+                        <p className="mt-1 break-words text-slate-500">
+                          参数：{item.argumentsSummary}
+                        </p>
+                        <p className="mt-1 break-words text-slate-500">
+                          结果：{item.resultSummary}
+                        </p>
+                      </article>
+                    ))}
+                  </div>
+                </details>
+              ) : null}
             </div>
 
             {isUser ? (

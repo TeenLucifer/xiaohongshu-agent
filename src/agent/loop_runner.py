@@ -13,6 +13,7 @@ from agent.context_builder import ContextBuilder
 from agent.errors import ProviderCallError
 from agent.memory.store import MemoryStore
 from agent.models import PromptMessage, RunRequest, RunResult, ToolCallPayload, ToolCallSummary
+from agent.run_events import RunEventSink
 from agent.session.models import Session, SessionMessage
 from agent.skills.loader import SkillsLoader
 from agent.tools.registry import ToolDefinition, ToolsRegistry
@@ -69,11 +70,13 @@ class LoopRunner:
         model_client: LoopModelClient | None = None,
         memory_consolidator: MemoryHook | None = None,
         trace_sink: TraceSink | None = None,
+        run_event_sink: RunEventSink | None = None,
         max_iterations: int = MAX_ITERATIONS,
     ) -> None:
         self.model_client = model_client
         self.memory_consolidator = memory_consolidator
         self.trace_sink = trace_sink
+        self.run_event_sink = run_event_sink
         self.max_iterations = max_iterations
         self.last_post_check_handle: object | None = None
 
@@ -300,13 +303,34 @@ class LoopRunner:
             return _stringify_result(result)
 
         indexed_results: dict[int, str] = {}
+        for tool_call in tool_calls:
+            self._emit_run_event(
+                event="tool_call_started",
+                payload={
+                    "tool_call_id": tool_call.id,
+                    "name": tool_call.name,
+                    "arguments_summary": _summarize_arguments(tool_call.arguments),
+                },
+            )
         with ThreadPoolExecutor(max_workers=max(1, len(tool_calls))) as executor:
             future_map = {
                 executor.submit(run_one, tool_call): index
                 for index, tool_call in enumerate(tool_calls)
             }
             for future in as_completed(future_map):
-                indexed_results[future_map[future]] = future.result()
+                index = future_map[future]
+                result_text = future.result()
+                indexed_results[index] = result_text
+                tool_call = tool_calls[index]
+                self._emit_run_event(
+                    event="tool_call_finished",
+                    payload={
+                        "tool_call_id": tool_call.id,
+                        "name": tool_call.name,
+                        "arguments_summary": _summarize_arguments(tool_call.arguments),
+                        "result_summary": _summarize_result(result_text),
+                    },
+                )
 
         return [(tool_calls[index], indexed_results[index]) for index in range(len(tool_calls))]
 
@@ -325,6 +349,11 @@ class LoopRunner:
         if self.trace_sink is None:
             return
         self.trace_sink.record(category=category, event=event, data=data)
+
+    def _emit_run_event(self, *, event: str, payload: dict[str, Any]) -> None:
+        if self.run_event_sink is None:
+            return
+        self.run_event_sink.emit(event=event, payload=payload)
 
     def _build_prompt_summary(
         self,

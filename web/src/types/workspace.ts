@@ -98,6 +98,13 @@ export interface ConversationEntry {
 export type ChatMessageRole = "user" | "agent";
 export type ChatMessageType = "plain" | "copy";
 
+export interface ToolSummaryItem {
+  id?: string;
+  name: string;
+  argumentsSummary: string;
+  resultSummary: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatMessageRole;
@@ -105,4 +112,6 @@ export interface ChatMessage {
   time: string;
   agentName?: string;
   type?: ChatMessageType;
+  toolSummary?: ToolSummaryItem[];
+  status?: "streaming" | "completed" | "failed";
 }

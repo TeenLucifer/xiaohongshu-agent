@@ -11,6 +11,7 @@ from agent.loop_runner import LoopModelClient, LoopRunner
 from agent.memory import DefaultMemoryConsolidationAgent, RuntimeMemoryConsolidator
 from agent.models import RunRequest, RunResult
 from agent.provider import ProviderConfig, create_default_model_client
+from agent.run_events import RunEventSink
 from agent.session.manager import SessionManager
 from agent.session.models import SessionSnapshot
 from agent.skills.loader import SkillsLoader
@@ -47,6 +48,7 @@ class AgentRuntime:
         self.model_client = model_client
         self.loop_runner = loop_runner or LoopRunner(model_client=model_client)
         self._trace_sink: TraceSink | None = None
+        self._run_event_sink: RunEventSink | None = None
 
     def create_session(
         self,
@@ -71,6 +73,7 @@ class AgentRuntime:
         self._ensure_memory_consolidator()
         if isinstance(self.loop_runner, LoopRunner):
             self.loop_runner.trace_sink = self._trace_sink
+            self.loop_runner.run_event_sink = self._run_event_sink
         extra_allowed_dirs = [
             session.workspace_path / "tmp",
             self.project_root / "skills",
