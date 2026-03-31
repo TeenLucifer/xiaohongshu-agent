@@ -231,7 +231,8 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
       patternSummaryStore[topicId] = {
         titlePatterns: ["场景切入 + 明确收益"],
         bodyPatterns: ["先代入痛点", "再给出公式", "最后强化收藏理由"],
-        keywords: ["通勤", "效率", "基础款", "清单"]
+        keywords: ["通勤", "效率", "基础款", "清单"],
+        imagePatterns: []
       };
     }
     if (
@@ -311,7 +312,8 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
       patternSummaryStore[topicId] = {
         titlePatterns: ["场景切入 + 明确收益"],
         bodyPatterns: ["先代入痛点", "再给出公式", "最后强化收藏理由"],
-        keywords: ["通勤", "效率", "基础款", "清单"]
+        keywords: ["通勤", "效率", "基础款", "清单"],
+        imagePatterns: []
       };
     }
     if (

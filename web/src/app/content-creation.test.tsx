@@ -71,10 +71,14 @@ describe("content creation feature", () => {
     expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
     expect(within(copyGroup).getByRole("heading", { name: "通勤穿搭别再乱买了，4 件基础单品就够用", level: 3 })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "展开图片" }));
-    expect(screen.getByRole("heading", { name: "文生图", level: 3 })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "图生图", level: 3 })).toBeInTheDocument();
-    expect(screen.getAllByAltText(/候选图/).length).toBeGreaterThan(0);
+    const imageToggle = screen.getByRole("button", { name: "展开图片" });
+    const imageGroup = imageToggle.closest("section");
+    if (!(imageGroup instanceof HTMLElement)) {
+      throw new Error("image group not found");
+    }
+    await user.click(imageToggle);
+    expect(within(imageGroup).getByText(/^素材图片 \(\d+\)$/)).toBeInTheDocument();
+    expect(within(imageGroup).getByText(/^编辑区 \(\d+\)$/)).toBeInTheDocument();
   });
 
   it("triggers summary and copy runs from the right panel buttons", async () => {

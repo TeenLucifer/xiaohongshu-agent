@@ -118,3 +118,22 @@ export interface ChatMessage {
   toolSummary?: ToolSummaryItem[];
   status?: "streaming" | "completed" | "failed";
 }
+
+// 素材图片（来自搜索结果）
+export interface MaterialImage {
+  id: string;
+  postId: string;
+  postTitle: string;
+  imageUrl: string;
+  alt: string;
+}
+
+// 编辑区图片（用户选择的图片，带编号）
+export interface EditorImage {
+  id: string;
+  order: number;
+  sourcePostId: string;
+  sourceImageId: string;
+  imageUrl: string;
+  alt: string;
+}

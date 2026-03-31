@@ -6,7 +6,7 @@ import { AgentTimeline } from "../components/AgentTimeline";
 import { CandidatePostsSection } from "../components/CandidatePostsSection";
 import { ContextPanelGroup } from "../components/ContextPanelGroup";
 import { CopyDraftSummaryPanel } from "../components/CopyDraftSummaryPanel";
-import { ImageResultsPanel } from "../components/ImageResultsPanel";
+import { ImageEditorSection } from "../components/ImageEditorSection";
 import { PatternSummarySection } from "../components/PatternSummarySection";
 import { WorkspaceSidebar } from "../components/WorkspaceSidebar";
 import { Badge } from "../components/ui/Badge";
@@ -32,6 +32,8 @@ import type {
   CandidatePost,
   ChatMessage,
   CopyDraftContent,
+  EditorImage,
+  MaterialImage,
   PatternSummaryContent,
   ToolSummaryItem,
   TopicCard,
@@ -151,6 +153,7 @@ export function TopicWorkspacePage(): JSX.Element {
   const [copyDraft, setCopyDraft] = useState<CopyDraftContent | undefined>();
   const [candidatePosts, setCandidatePosts] = useState<CandidatePost[]>([]);
   const [patternSummary, setPatternSummary] = useState<PatternSummaryContent | undefined>();
+  const [editorImages, setEditorImages] = useState<EditorImage[]>([]);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isDeletingTopic, setIsDeletingTopic] = useState(false);
@@ -476,6 +479,23 @@ export function TopicWorkspacePage(): JSX.Element {
     }
   }
 
+  // 从 candidatePosts 收集所有图片作为素材
+  const materialImages: MaterialImage[] = useMemo(() => {
+    const images: MaterialImage[] = [];
+    for (const post of candidatePosts) {
+      for (const img of post.images) {
+        images.push({
+          id: `${post.id}-${img.id}`,
+          postId: post.id,
+          postTitle: post.title,
+          imageUrl: img.imageUrl,
+          alt: img.alt,
+        });
+      }
+    }
+    return images;
+  }, [candidatePosts]);
+
   if (topic === undefined) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50 p-6">
@@ -759,7 +779,11 @@ export function TopicWorkspacePage(): JSX.Element {
                   onToggle={() => toggleGroup("imageResults")}
                   section={sectionsById.imageResults}
                 >
-                  <ImageResultsPanel groups={imageGroups} />
+                  <ImageEditorSection
+                    editorImages={editorImages}
+                    materialImages={materialImages}
+                    onEditorImagesChange={setEditorImages}
+                  />
                 </ContextPanelGroup>
               ) : null}
             </motion.div>

@@ -162,7 +162,8 @@ export const mockPatternSummaryByTopicId: Record<string, PatternSummaryContent> 
   "topic-spring-commute": {
     titlePatterns: ["场景 + 痛点 + 解决方案", "低预算 + 高效率 + 通勤"],
     bodyPatterns: ["开头代入上班焦虑", "中段给出搭配公式", "结尾用清单强化收藏价值"],
-    keywords: ["通勤", "效率", "基础款", "衣橱整理"]
+    keywords: ["通勤", "效率", "基础款", "衣橱整理"],
+    imagePatterns: []
   }
 };
 
