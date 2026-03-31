@@ -50,6 +50,25 @@ export function SkillsPage(): JSX.Element {
     };
   }, []);
 
+  // ESC 键关闭弹窗
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape" && selectedSkill !== null) {
+        setSelectedSkill(null);
+      }
+    }
+
+    if (selectedSkill !== null) {
+      document.addEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "hidden";
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [selectedSkill]);
+
   return (
     <main
       className="grid h-screen gap-4 pr-4 pl-0"
@@ -126,10 +145,15 @@ export function SkillsPage(): JSX.Element {
       </section>
 
       {selectedSkill ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/28 px-4 py-4">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/28 px-4 py-4"
+          onClick={() => setSelectedSkill(null)}
+          role="presentation"
+        >
           <div
             aria-modal="true"
             className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-white/60 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.22)]"
+            onClick={(event) => event.stopPropagation()}
             role="dialog"
           >
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200/80 px-6 py-5">

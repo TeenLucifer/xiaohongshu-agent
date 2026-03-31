@@ -158,6 +158,7 @@ export function TopicWorkspacePage(): JSX.Element {
   const [isSending, setIsSending] = useState(false);
   const [isDeletingTopic, setIsDeletingTopic] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
+  const [activeContextTab, setActiveContextTab] = useState<"选题" | "创作">("选题");
 
   useEffect(() => {
     let cancelled = false;
@@ -666,6 +667,34 @@ export function TopicWorkspacePage(): JSX.Element {
             </Button>
           </div>
 
+          {/* Tab Selector */}
+          {isContextOpen ? (
+            <div className="flex gap-1 px-3 py-2">
+              <button
+                className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeContextTab === "选题"
+                    ? "bg-slate-100 text-slate-900"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+                onClick={() => setActiveContextTab("选题")}
+                type="button"
+              >
+                选题
+              </button>
+              <button
+                className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeContextTab === "创作"
+                    ? "bg-slate-100 text-slate-900"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+                onClick={() => setActiveContextTab("创作")}
+                type="button"
+              >
+                创作
+              </button>
+            </div>
+          ) : null}
+
           {isContextOpen ? (
             <motion.div
               animate={{ opacity: 1, x: 0 }}
@@ -673,118 +702,128 @@ export function TopicWorkspacePage(): JSX.Element {
               initial={{ opacity: 0, x: 16 }}
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
-              {sectionsById.materials ? (
-                <ContextPanelGroup
-                  expanded={expandedGroups.materials}
-                  onToggle={() => toggleGroup("materials")}
-                  section={sectionsById.materials}
-                >
-                  {materials.length === 0 ? (
-                    <p className="text-sm text-slate-500">空状态</p>
-                  ) : (
-                    <div className="grid gap-2">
-                      {materials.map((material) => (
-                        <article className="rounded-[18px] bg-slate-50 p-3" key={material.id}>
-                          <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">
-                            {material.type === "image"
-                              ? "图片"
-                              : material.type === "text"
-                                ? "文本"
-                                : "链接"}
-                          </p>
-                          <p className="mt-2 text-sm font-medium text-slate-900">
-                            {material.label}
-                          </p>
-                          <p className="mt-1 text-xs leading-5 text-slate-500">
-                            {material.detail}
-                          </p>
-                        </article>
-                      ))}
-                    </div>
-                  )}
-                </ContextPanelGroup>
-              ) : null}
-
-              {sectionsById.candidatePosts ? (
-                <ContextPanelGroup
-                  expanded={expandedGroups.candidatePosts}
-                  onToggle={() => toggleGroup("candidatePosts")}
-                  section={sectionsById.candidatePosts}
-                >
-                  <CandidatePostsSection
-                    onSelectedOrderChange={(nextSelectedOrder) =>
-                      void handleSelectedOrderChange(nextSelectedOrder)
-                    }
-                    posts={candidatePosts}
-                  />
-                </ContextPanelGroup>
-              ) : null}
-
-              {sectionsById.patternSummary ? (
-                <ContextPanelGroup
-                  actions={
-                    <Button
-                      disabled={isSending}
-                      onClick={() => void handleGeneratePatternSummary()}
-                      size="sm"
-                      type="button"
-                      variant="subtle"
+              {/* 选题 Tab: 素材、搜索结果、总结 */}
+              {activeContextTab === "选题" ? (
+                <>
+                  {sectionsById.materials ? (
+                    <ContextPanelGroup
+                      expanded={expandedGroups.materials}
+                      onToggle={() => toggleGroup("materials")}
+                      section={sectionsById.materials}
                     >
-                      {patternSummary ? "重新生成总结" : "生成总结"}
-                    </Button>
-                  }
-                  expanded={expandedGroups.patternSummary}
-                  onToggle={() => toggleGroup("patternSummary")}
-                  section={sectionsById.patternSummary}
-                >
-                  {patternSummary ? (
-                    <PatternSummarySection
-                      content={patternSummary}
+                      {materials.length === 0 ? (
+                        <p className="text-sm text-slate-500">空状态</p>
+                      ) : (
+                        <div className="grid gap-2">
+                          {materials.map((material) => (
+                            <article className="rounded-[18px] bg-slate-50 p-3" key={material.id}>
+                              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">
+                                {material.type === "image"
+                                  ? "图片"
+                                  : material.type === "text"
+                                    ? "文本"
+                                    : "链接"}
+                              </p>
+                              <p className="mt-2 text-sm font-medium text-slate-900">
+                                {material.label}
+                              </p>
+                              <p className="mt-1 text-xs leading-5 text-slate-500">
+                                {material.detail}
+                              </p>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </ContextPanelGroup>
+                  ) : null}
+
+                  {sectionsById.candidatePosts ? (
+                    <ContextPanelGroup
+                      expanded={expandedGroups.candidatePosts}
+                      onToggle={() => toggleGroup("candidatePosts")}
+                      section={sectionsById.candidatePosts}
+                    >
+                      <CandidatePostsSection
+                        onSelectedOrderChange={(nextSelectedOrder) =>
+                          void handleSelectedOrderChange(nextSelectedOrder)
+                        }
+                        posts={candidatePosts}
+                      />
+                    </ContextPanelGroup>
+                  ) : null}
+
+                  {sectionsById.patternSummary ? (
+                    <ContextPanelGroup
+                      actions={
+                        <Button
+                          disabled={isSending}
+                          onClick={() => void handleGeneratePatternSummary()}
+                          size="sm"
+                          type="button"
+                          variant="subtle"
+                        >
+                          {patternSummary ? "重新生成总结" : "生成总结"}
+                        </Button>
+                      }
+                      expanded={expandedGroups.patternSummary}
+                      onToggle={() => toggleGroup("patternSummary")}
                       section={sectionsById.patternSummary}
-                    />
-                  ) : (
-                    <p className="text-sm text-slate-500">空状态</p>
-                  )}
-                </ContextPanelGroup>
-              ) : null}
-
-              {sectionsById.copyDraft ? (
-                <ContextPanelGroup
-                  actions={
-                    <Button
-                      disabled={isSending}
-                      onClick={() => void handleGenerateCopyDraft()}
-                      size="sm"
-                      type="button"
-                      variant="subtle"
                     >
-                      {copyDraft ? "重新生成文案" : "生成文案"}
-                    </Button>
-                  }
-                  expanded={expandedGroups.copyDraft}
-                  onToggle={() => toggleGroup("copyDraft")}
-                  section={sectionsById.copyDraft}
-                >
-                  {copyDraft ? (
-                    <CopyDraftSummaryPanel copyDraft={copyDraft} />
-                  ) : (
-                    <p className="text-sm text-slate-500">空状态</p>
-                  )}
-                </ContextPanelGroup>
+                      {patternSummary ? (
+                        <PatternSummarySection
+                          content={patternSummary}
+                          section={sectionsById.patternSummary}
+                        />
+                      ) : (
+                        <p className="text-sm text-slate-500">空状态</p>
+                      )}
+                    </ContextPanelGroup>
+                  ) : null}
+                </>
               ) : null}
 
-              {sectionsById.imageResults ? (
-                <ContextPanelGroup
-                  expanded={expandedGroups.imageResults}
-                  onToggle={() => toggleGroup("imageResults")}
-                  section={sectionsById.imageResults}
-                >
-                  <ImageEditorSection
-                    editorImages={editorImages}
-                    materialImages={materialImages}
-                    onEditorImagesChange={setEditorImages}
-                  />
-                </ContextPanelGroup>
+              {/* 创作 Tab: 文案、图片 */}
+              {activeContextTab === "创作" ? (
+                <>
+                  {sectionsById.copyDraft ? (
+                    <ContextPanelGroup
+                      actions={
+                        <Button
+                          disabled={isSending}
+                          onClick={() => void handleGenerateCopyDraft()}
+                          size="sm"
+                          type="button"
+                          variant="subtle"
+                        >
+                          {copyDraft ? "重新生成文案" : "生成文案"}
+                        </Button>
+                      }
+                      expanded={expandedGroups.copyDraft}
+                      onToggle={() => toggleGroup("copyDraft")}
+                      section={sectionsById.copyDraft}
+                    >
+                      {copyDraft ? (
+                        <CopyDraftSummaryPanel copyDraft={copyDraft} />
+                      ) : (
+                        <p className="text-sm text-slate-500">空状态</p>
+                      )}
+                    </ContextPanelGroup>
+                  ) : null}
+
+                  {sectionsById.imageResults ? (
+                    <ContextPanelGroup
+                      expanded={expandedGroups.imageResults}
+                      onToggle={() => toggleGroup("imageResults")}
+                      section={sectionsById.imageResults}
+                    >
+                      <ImageEditorSection
+                        editorImages={editorImages}
+                        materialImages={materialImages}
+                        onEditorImagesChange={setEditorImages}
+                      />
+                    </ContextPanelGroup>
+                  ) : null}
+                </>
               ) : null}
             </motion.div>
           ) : (

@@ -206,7 +206,7 @@ export function CandidatePostsSection({
                 <div>
                   <img
                     alt={currentImage?.alt ?? `${activePost.title} 详情图`}
-                    className="w-full rounded-[22px] object-cover"
+                    className="aspect-[3/4] w-full rounded-[22px] object-cover"
                     src={currentImage?.imageUrl ?? activePost.imageUrl}
                   />
                   {hasMultipleImages ? (

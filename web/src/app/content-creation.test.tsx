@@ -29,6 +29,9 @@ describe("content creation feature", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
+    // 切换到"创作" tab
+    await user.click(screen.getByRole("button", { name: "创作" }));
+
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
     if (!(copyGroup instanceof HTMLElement)) {
@@ -52,6 +55,7 @@ describe("content creation feature", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
+    // 总结在"选题" tab（默认显示）
     const summaryToggle = screen.getByRole("button", { name: "展开总结" });
     const summaryGroup = summaryToggle.closest("section");
     if (!(summaryGroup instanceof HTMLElement)) {
@@ -61,6 +65,9 @@ describe("content creation feature", () => {
     expect(within(summaryGroup).getByText("标题模式")).toBeInTheDocument();
     expect(within(summaryGroup).getByText("高频关键词")).toBeInTheDocument();
     expect(within(summaryGroup).getByRole("button", { name: "重新生成总结" })).toBeInTheDocument();
+
+    // 切换到"创作" tab 查看文案和图片
+    await user.click(screen.getByRole("button", { name: "创作" }));
 
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
@@ -94,6 +101,7 @@ describe("content creation feature", () => {
 
     await screen.findByRole("complementary", { name: "右侧面板" });
 
+    // 总结在"选题" tab（默认显示）
     const summaryToggle = screen.getByRole("button", { name: "展开总结" });
     const summaryGroup = summaryToggle.closest("section");
     if (!(summaryGroup instanceof HTMLElement)) {
@@ -104,6 +112,9 @@ describe("content creation feature", () => {
     expect(
       await screen.findByText("请基于当前已选帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。")
     ).toBeInTheDocument();
+
+    // 切换到"创作" tab 查看文案
+    await user.click(screen.getByRole("button", { name: "创作" }));
 
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
