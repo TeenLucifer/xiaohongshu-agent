@@ -35,6 +35,7 @@
   - `Workspace Data Root`
   - `workspace/selected_posts.json`
   - `workspace/posts/<post_id>/post.json`
+  - `workspace/posts/<post_id>/assets/image-*.jpg`（通过 `image-analysis` skill）
 - 输出：
   - `workspace/pattern_summary.json`
   - 一条主栏 final answer，总结本轮写入结果
@@ -44,11 +45,26 @@
 - skill 放在项目根 `skills/` 下，与 `xiaohongshu-skills` 并列
 - skill 不新增脚本，只使用现有文件工具
 - 只消费 `selected_posts.json` 中的帖子，不直接消费全部帖子包
+- 总结时必须调用 `image-analysis` skill 分析每篇已选帖子的图片
+- 若帖子无图片，跳过图片分析，继续处理文本
 - 若没有已选帖子：
   - 不写 `pattern_summary.json`
   - 明确提示用户先加入已选帖子
-- 写回结果必须遵循 `PatternSummaryRecord`
-- 右侧“总结”按钮本质上只是代用户发送固定指令，不新增第二套后端动作
+- 写回结果必须遵循 `PatternSummaryRecord`，包含 `image_patterns` 和 `image_quality_notes` 字段
+- 右侧”总结”按钮本质上只是代用户发送固定指令，不新增第二套后端动作
+
+## 输出字段
+
+`pattern_summary.json` 内容至少包含：
+
+- `title_patterns`：标题模式列表
+- `body_patterns`：正文模式列表
+- `keywords`：关键词列表
+- `image_patterns`：图片共性特征列表
+- `image_quality_notes`：整体图片质量评价
+- `summary_text`：总结文本（可选）
+- `source_post_ids`：来源帖子 ID 列表
+- `updated_at`：更新时间
 
 ## 验收标准
 

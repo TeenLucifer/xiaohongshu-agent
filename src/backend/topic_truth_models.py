@@ -67,6 +67,8 @@ class PatternSummaryRecord(BaseModel):
     title_patterns: list[str] = Field(default_factory=list)
     body_patterns: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    image_patterns: list[str] = Field(default_factory=list)
+    image_quality_notes: str | None = None
     summary_text: str | None = None
     source_post_ids: list[str] = Field(default_factory=list)
     updated_at: datetime

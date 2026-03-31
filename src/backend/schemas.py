@@ -224,6 +224,8 @@ class PatternSummaryContentResponse(BaseModel):
     titlePatterns: list[str] = Field(default_factory=list)
     bodyPatterns: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
+    imagePatterns: list[str] = Field(default_factory=list)
+    imageQualityNotes: str | None = None
     summaryText: str | None = None
 
     @classmethod
@@ -232,6 +234,8 @@ class PatternSummaryContentResponse(BaseModel):
             titlePatterns=record.title_patterns,
             bodyPatterns=record.body_patterns,
             keywords=record.keywords,
+            imagePatterns=record.image_patterns,
+            imageQualityNotes=record.image_quality_notes,
             summaryText=record.summary_text,
         )
 

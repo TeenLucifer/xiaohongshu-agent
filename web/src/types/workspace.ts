@@ -59,6 +59,8 @@ export interface PatternSummaryContent {
   titlePatterns: string[];
   bodyPatterns: string[];
   keywords: string[];
+  imagePatterns: string[];
+  imageQualityNotes?: string;
   summaryText?: string;
 }
 

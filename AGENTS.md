@@ -113,6 +113,9 @@
   - 基于已选帖子生成结构化总结，并写入 `pattern_summary.json`
 - `019-copy-rewrite-skill`
   - 基于已选帖子与总结结果生成文案，并写入 `copy_draft.json`
+- `024-image-analysis-skill`
+  - 调用视觉 API 分析帖子图片，返回结构化文本分析结果
+  - 供 pattern-summary 等技能消费
 
 ### 后端与集成
 
