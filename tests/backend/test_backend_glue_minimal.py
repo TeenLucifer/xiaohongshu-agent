@@ -430,6 +430,30 @@ def test_update_editor_images_accepts_camel_case_payload(tmp_path: Path) -> None
     assert payload["items"][0]["imagePath"] == "posts/post-1/assets/image-01.png"
 
 
+def test_update_copy_draft_persists_workspace_file(tmp_path: Path) -> None:
+    async def run() -> dict[str, Any]:
+        async with make_client(tmp_path) as client:
+            created = await client.post(
+                "/api/topics",
+                json={"title": "文案话题", "description": ""},
+            )
+            topic = cast(dict[str, Any], created.json())
+            response = await client.put(
+                f"/api/topics/{topic['topic_id']}/copy-draft",
+                json={
+                    "topic_title": "文案话题",
+                    "title": "新的标题",
+                    "body": "## 第一行\n\n- 第二行",
+                },
+            )
+            assert response.status_code == 200
+            return cast(dict[str, Any], response.json())
+
+    payload = asyncio.run(run())
+    assert payload["copy_draft"]["title"] == "新的标题"
+    assert payload["copy_draft"]["body"] == "## 第一行\n\n- 第二行"
+
+
 def test_streaming_run_endpoint_emits_ordered_sse_events(tmp_path: Path) -> None:
     async def run() -> str:
         async with make_streaming_client(tmp_path) as client:

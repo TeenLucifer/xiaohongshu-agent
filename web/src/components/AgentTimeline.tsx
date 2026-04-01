@@ -1,31 +1,20 @@
 import { motion } from "framer-motion";
-import { Bot, PencilLine, UserRound } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Bot, UserRound } from "lucide-react";
+import { useState } from "react";
 import { cn } from "../lib/cn";
 import type { ChatMessage, CopyDraftContent } from "../types/workspace";
 import { ImageLightbox } from "./ImageLightbox";
 import { MarkdownContent } from "./MarkdownContent";
-import { Button } from "./ui/Button";
 
 export function AgentTimeline({
   copyDraft,
   messages,
-  onCopyDraftChange
 }: {
   copyDraft: CopyDraftContent | undefined;
   messages: ChatMessage[];
-  onCopyDraftChange: (draft: CopyDraftContent) => void;
 }): JSX.Element {
-  const [editing, setEditing] = useState(false);
-  const [draftTitle, setDraftTitle] = useState(copyDraft?.title ?? "");
-  const [draftBody, setDraftBody] = useState(copyDraft?.body ?? "");
   const [lightboxImages, setLightboxImages] = useState<Array<{ imageUrl: string; alt: string }>>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-
-  useEffect(() => {
-    setDraftTitle(copyDraft?.title ?? "");
-    setDraftBody(copyDraft?.body ?? "");
-  }, [copyDraft]);
 
   return (
     <>
@@ -64,48 +53,11 @@ export function AgentTimeline({
 
                 {isCopyMessage ? (
                   <div className="mt-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[13px] leading-6 text-slate-700">已生成一版完整文案，你可以直接在这里修改。</p>
-                      <Button onClick={() => setEditing((current) => !current)} size="sm" type="button" variant="ghost">
-                        <PencilLine className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        {editing ? "收起" : "编辑"}
-                      </Button>
+                    <p className="text-[13px] leading-6 text-slate-700">已生成一版完整文案，请在右侧文案区继续编辑。</p>
+                    <div className="mt-3 text-[14px] leading-7 text-slate-700">
+                      <p className="font-semibold text-slate-900">{copyDraft.title}</p>
+                      <MarkdownContent className="mt-3" content={copyDraft.body} />
                     </div>
-
-                    {editing ? (
-                      <div className="mt-3 grid gap-3">
-                        <label className="grid gap-1.5 text-xs text-slate-500">
-                          <span>笔记标题</span>
-                          <input
-                            className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 outline-none transition focus:border-blue-300 focus:bg-white"
-                            onChange={(event) => {
-                              const next = event.target.value;
-                              setDraftTitle(next);
-                              onCopyDraftChange({ title: next, body: draftBody });
-                            }}
-                            type="text"
-                            value={draftTitle}
-                          />
-                        </label>
-                        <label className="grid gap-1.5 text-xs text-slate-500">
-                          <span>笔记正文</span>
-                          <textarea
-                            className="min-h-44 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm leading-7 text-slate-900 outline-none transition focus:border-blue-300 focus:bg-white"
-                            onChange={(event) => {
-                              const next = event.target.value;
-                              setDraftBody(next);
-                              onCopyDraftChange({ title: draftTitle, body: next });
-                            }}
-                            value={draftBody}
-                          />
-                        </label>
-                      </div>
-                    ) : (
-                      <div className="mt-3 whitespace-pre-wrap text-[14px] leading-7 text-slate-700">
-                        <p className="font-semibold text-slate-900">{copyDraft.title}</p>
-                        <p className="mt-3">{copyDraft.body}</p>
-                      </div>
-                    )}
                   </div>
                 ) : isUser ? (
                   <p className="mt-2 whitespace-pre-wrap text-[14px] leading-7">{message.text}</p>

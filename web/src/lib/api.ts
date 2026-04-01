@@ -93,6 +93,13 @@ export interface EditorImagesApiResponse {
   updated_at: string;
 }
 
+export interface CopyDraftApiResponse {
+  topic_id: string;
+  topic_title: string;
+  copy_draft: CopyDraftContent;
+  updated_at: string;
+}
+
 export interface DeleteImageResultApiResponse {
   deleted_image_id: string;
   updated_at: string;
@@ -435,6 +442,21 @@ export async function updateEditorImages(
       imageUrl: toAbsoluteApiUrl(image.imageUrl),
     })),
   };
+}
+
+export async function updateCopyDraft(
+  topicId: string,
+  topicTitle: string,
+  draft: CopyDraftContent
+): Promise<CopyDraftApiResponse> {
+  return requestJson<CopyDraftApiResponse>(`/api/topics/${topicId}/copy-draft`, {
+    method: "PUT",
+    body: JSON.stringify({
+      topic_title: topicTitle,
+      title: draft.title,
+      body: draft.body,
+    }),
+  });
 }
 
 export async function deleteImageResult(

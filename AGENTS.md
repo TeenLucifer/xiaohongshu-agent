@@ -69,12 +69,14 @@
 - 话题列表、创建/删除与真实 topic 管理
 - 聊天式主栏、Markdown 显示、final answer 收口与折叠 tool 摘要
 - 主栏流式 run API 与渐进展示首版
+- 右侧文案区白板式 Markdown 编辑与真实写回
 - Agent Runtime 首版
 - Session / History 子系统
 - Context Memory 子系统
 - 后端最小胶水层
 - session workspace 数据层
 - 候选帖子与总结的右侧工作区真实化
+- 真实图片生成与右侧图片区展示主链路
 
 当前仍在继续推进的部分：
 

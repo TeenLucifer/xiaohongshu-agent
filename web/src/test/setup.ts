@@ -14,6 +14,34 @@ Object.defineProperty(window, "scrollTo", {
   writable: true
 });
 
+if (typeof Range !== "undefined") {
+  Object.defineProperty(Range.prototype, "getBoundingClientRect", {
+    configurable: true,
+    value: () => ({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      width: 0,
+      height: 0,
+      toJSON: () => ({})
+    })
+  });
+  Object.defineProperty(Range.prototype, "getClientRects", {
+    configurable: true,
+    value: () =>
+      ({
+        item: () => null,
+        length: 0,
+        [Symbol.iterator]: function* () {
+          return;
+        }
+      }) as DOMRectList
+  });
+}
+
 let topicStore = mockTopics.map((topic) => ({ ...topic }));
 let candidatePostStore = JSON.parse(JSON.stringify(mockCandidatePostsByTopicId)) as Record<string, typeof mockCandidatePostsByTopicId[string]>;
 let messageStore = JSON.parse(JSON.stringify(mockChatMessagesByTopicId)) as Record<
@@ -284,6 +312,30 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         topic_title: topic.title,
         items: editorImagesStore[topicId],
         updated_at: "2026-03-29T10:00:40+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.endsWith("/copy-draft") && init?.method === "PUT") {
+    const rawBody = init.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as { title?: string; body?: string })
+        : {};
+    copyDraftStore[topicId] = {
+      title: parsedBody.title ?? "",
+      body: parsedBody.body ?? "",
+    };
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        copy_draft: copyDraftStore[topicId],
+        updated_at: "2026-03-29T10:00:42+08:00",
       }),
       {
         status: 200,

@@ -16,10 +16,12 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from agent.runtime import AgentRuntime
 from agent.trace import TraceMode
 from backend.schemas import (
+    CopyDraftResponse,
     CreateTopicRequestBody,
     ErrorResponse,
     ResetRequestBody,
     RunRequestBody,
+    UpdateCopyDraftRequestBody,
     UpdateEditorImagesRequestBody,
     UpdateSelectedPostsRequestBody,
 )
@@ -235,6 +237,19 @@ def create_app(
             topic_id=topic_id,
             topic_title=payload.topic_title,
             items=payload.items,
+        )
+
+    @app.put("/api/topics/{topic_id}/copy-draft")
+    async def update_copy_draft(
+        request: Request,
+        topic_id: str,
+        payload: UpdateCopyDraftRequestBody,
+    ) -> CopyDraftResponse:
+        return request.app.state.backend_service.update_copy_draft(
+            topic_id=topic_id,
+            topic_title=payload.topic_title,
+            title=payload.title,
+            body=payload.body,
         )
 
     @app.delete("/api/topics/{topic_id}/image-results/{image_id}")

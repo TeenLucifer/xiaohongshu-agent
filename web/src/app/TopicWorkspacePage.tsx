@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, SendHorizontal, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AgentTimeline } from "../components/AgentTimeline";
 import { CandidatePostsSection } from "../components/CandidatePostsSection";
@@ -25,6 +25,7 @@ import {
   toChatMessages,
   toTopicCards,
   updateEditorImages,
+  updateCopyDraft,
   updateSelectedPosts,
 } from "../lib/api";
 import {
@@ -117,7 +118,7 @@ function buildWorkspaceSections({
       id: "copyDraft",
       title: "文案",
       status: copyDraft ? "success" : "empty",
-      summary: copyDraft ? "当前文案支持在中栏进入编辑态。" : "还没有文案草稿。",
+      summary: copyDraft ? "当前文案可在右侧继续编辑。" : "还没有文案草稿。",
     },
     {
       id: "imageResults",
@@ -164,6 +165,9 @@ export function TopicWorkspacePage(): JSX.Element {
   const [isDeletingTopic, setIsDeletingTopic] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [activeContextTab, setActiveContextTab] = useState<"选题" | "创作">("选题");
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const copyDraftSaveTimerRef = useRef<number | null>(null);
+  const [isCopyDraftSaving, setIsCopyDraftSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -213,7 +217,35 @@ export function TopicWorkspacePage(): JSX.Element {
     setEditorImages([]);
     setImageResults([]);
     setIsSidebarCollapsed(false);
+    setIsCopyDraftSaving(false);
+    if (copyDraftSaveTimerRef.current !== null) {
+      window.clearTimeout(copyDraftSaveTimerRef.current);
+      copyDraftSaveTimerRef.current = null;
+    }
   }, [topicId]);
+
+  useEffect(() => {
+    return () => {
+      if (copyDraftSaveTimerRef.current !== null) {
+        window.clearTimeout(copyDraftSaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = timelineScrollRef.current;
+    if (container === null) {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const targetTop = container.scrollHeight;
+      container.scrollTop = targetTop;
+      if (typeof container.scrollTo === "function") {
+        container.scrollTo({ top: targetTop, behavior: "smooth" });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages]);
 
   useEffect(() => {
     if (topic === undefined) {
@@ -510,6 +542,31 @@ export function TopicWorkspacePage(): JSX.Element {
     }
   }
 
+  function handleCopyDraftChange(nextDraft: CopyDraftContent): void {
+    setCopyDraft(nextDraft);
+    setMessagesError(null);
+    if (topic === undefined) {
+      return;
+    }
+    if (copyDraftSaveTimerRef.current !== null) {
+      window.clearTimeout(copyDraftSaveTimerRef.current);
+    }
+    setIsCopyDraftSaving(true);
+    copyDraftSaveTimerRef.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const response = await updateCopyDraft(topicId, topic.title, nextDraft);
+          setCopyDraft(response.copy_draft);
+        } catch (error: unknown) {
+          const message = error instanceof Error ? error.message : "保存文案失败";
+          setMessagesError(message);
+        } finally {
+          setIsCopyDraftSaving(false);
+        }
+      })();
+    }, 280);
+  }
+
   async function handleRemoveGeneratedImage(imageId: string): Promise<void> {
     if (topic === undefined) {
       return;
@@ -618,7 +675,7 @@ export function TopicWorkspacePage(): JSX.Element {
           </div>
         </div>
 
-        <div className="scrollbar-subtle mt-6 flex-1 overflow-y-auto pr-2">
+        <div className="scrollbar-subtle mt-6 flex-1 overflow-y-auto pr-2" ref={timelineScrollRef}>
           <div className="mx-auto w-full max-w-[720px]">
             {messagesError ? (
               <Surface className="mb-4 border border-rose-200 bg-rose-50/80 p-4 text-sm text-rose-700">
@@ -628,7 +685,7 @@ export function TopicWorkspacePage(): JSX.Element {
             {isMessagesLoading && messages.length === 0 ? (
               <Surface className="mb-4 p-4 text-sm text-slate-500">正在加载会话...</Surface>
             ) : null}
-            <AgentTimeline copyDraft={copyDraft} messages={messages} onCopyDraftChange={setCopyDraft} />
+            <AgentTimeline copyDraft={copyDraft} messages={messages} />
           </div>
         </div>
 
@@ -848,11 +905,11 @@ export function TopicWorkspacePage(): JSX.Element {
                       onToggle={() => toggleGroup("copyDraft")}
                       section={sectionsById.copyDraft}
                     >
-                      {copyDraft ? (
-                        <CopyDraftSummaryPanel copyDraft={copyDraft} />
-                      ) : (
-                        <p className="text-sm text-slate-500">空状态</p>
-                      )}
+                      <CopyDraftSummaryPanel
+                        copyDraft={copyDraft ?? { title: "", body: "" }}
+                        isSaving={isCopyDraftSaving}
+                        onChange={handleCopyDraftChange}
+                      />
                     </ContextPanelGroup>
                   ) : null}
 

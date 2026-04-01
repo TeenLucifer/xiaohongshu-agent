@@ -56,6 +56,12 @@ describe("conversation timeline feature", () => {
   it("keeps message layout lightweight and allows sending a new message", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollToSpy,
+    });
     await renderWorkspace();
 
     const composer = screen.getByLabelText("对话输入框");
@@ -73,6 +79,11 @@ describe("conversation timeline feature", () => {
         return url.includes("/api/topics/topic-spring-commute/context");
       })
     ).toBe(true);
+    expect(scrollToSpy).toHaveBeenCalled();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: originalScrollTo,
+    });
     fetchSpy.mockRestore();
   });
 });

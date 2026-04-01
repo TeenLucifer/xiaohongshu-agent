@@ -41,13 +41,8 @@ describe("content creation feature", () => {
     await user.click(copyToggle);
 
     expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
-    expect(
-      within(copyGroup).getByRole("heading", {
-        name: "通勤穿搭别再乱买了，4 件基础单品就够用",
-        level: 3
-      })
-    ).toBeInTheDocument();
-    expect(within(copyGroup).queryByRole("button", { name: "编辑" })).not.toBeInTheDocument();
+    expect(within(copyGroup).getByText("Markdown 文案")).toBeInTheDocument();
+    expect(within(copyGroup).getByLabelText("文案正文编辑器")).toBeInTheDocument();
     expect(within(copyGroup).getByRole("button", { name: "重新生成文案" })).toBeInTheDocument();
   });
 
@@ -76,7 +71,7 @@ describe("content creation feature", () => {
     }
     await user.click(copyToggle);
     expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
-    expect(within(copyGroup).getByRole("heading", { name: "通勤穿搭别再乱买了，4 件基础单品就够用", level: 3 })).toBeInTheDocument();
+    expect(within(copyGroup).getByLabelText("文案正文编辑器")).toBeInTheDocument();
 
     const imageToggle = screen.getByRole("button", { name: "展开图片" });
     const imageGroup = imageToggle.closest("section");
@@ -126,5 +121,50 @@ describe("content creation feature", () => {
     expect(
       await screen.findByText("请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。")
     ).toBeInTheDocument();
+  });
+
+  it("supports whiteboard-style markdown editing in the copy draft panel", async () => {
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "创作" }));
+    const copyToggle = screen.getByRole("button", { name: "展开文案" });
+    const copyGroup = copyToggle.closest("section");
+    if (!(copyGroup instanceof HTMLElement)) {
+      throw new Error("copy group not found");
+    }
+    await user.click(copyToggle);
+
+    expect(await within(copyGroup).findByRole("heading", { level: 1, name: "通勤穿搭别再乱买了，4 件基础单品就够用" })).toBeInTheDocument();
+    const editor = within(copyGroup).getByLabelText("文案正文编辑器");
+    await user.click(editor);
+    await user.type(editor, "补一段新的正文");
+
+    expect(await within(copyGroup).findByText("已自动保存")).toBeInTheDocument();
+  });
+
+  it("shows an editable copy draft panel even when no draft exists yet", async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter
+        future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
+        initialEntries={["/topics/topic-small-rental"]}
+      >
+        <AppRoutes />
+      </MemoryRouter>
+    );
+
+    await screen.findByRole("complementary", { name: "右侧面板" });
+    await user.click(screen.getByRole("button", { name: "创作" }));
+
+    const copyToggle = screen.getByRole("button", { name: "展开文案" });
+    const copyGroup = copyToggle.closest("section");
+    if (!(copyGroup instanceof HTMLElement)) {
+      throw new Error("copy group not found");
+    }
+    await user.click(copyToggle);
+
+    expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
+    expect(within(copyGroup).getByLabelText("文案正文编辑器")).toBeInTheDocument();
   });
 });

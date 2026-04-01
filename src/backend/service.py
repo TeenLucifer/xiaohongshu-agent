@@ -28,6 +28,7 @@ from backend.schemas import (
     CandidatePostContextResponse,
     CandidatePostImageResponse,
     CopyDraftContentResponse,
+    CopyDraftResponse,
     CreateTopicResponse,
     DeleteImageResultResponse,
     DeleteTopicResponse,
@@ -57,6 +58,7 @@ from backend.schemas import (
 from backend.topic_meta_store import TopicMetaStore
 from backend.topic_store import TopicSessionStore
 from backend.topic_truth_models import (
+    CopyDraftRecord,
     EditorImageRecord,
     EditorImagesDocument,
     GeneratedImageResultRecord,
@@ -589,6 +591,38 @@ class BackendAppService:
                 self._convert_editor_image(topic_id=topic_id, record=item)
                 for item in document.items
             ],
+            updated_at=updated_at,
+        )
+
+    def update_copy_draft(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        title: str,
+        body: str,
+    ) -> CopyDraftResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        existing = self._workspace_store.read_copy_draft(session.session_id)
+        updated_at = now_local()
+        draft = self._workspace_store.write_copy_draft(
+            session.session_id,
+            CopyDraftRecord(
+                title=title,
+                body=body,
+                source_summary_version=(
+                    existing.source_summary_version if existing is not None else None
+                ),
+                updated_at=updated_at,
+            ),
+        )
+        record.updated_at = updated_at
+        self._topic_store.save(record)
+        self._sync_topic_meta(record, description=None)
+        return CopyDraftResponse(
+            topic_id=record.topic_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            copy_draft=CopyDraftContentResponse.from_record(draft),
             updated_at=updated_at,
         )
 

@@ -113,6 +113,17 @@ class UpdateEditorImagesRequestBody(BaseModel):
     items: list[UpdateEditorImageItemRequestBody] = Field(default_factory=list)
 
 
+class UpdateCopyDraftRequestBody(BaseModel):
+    """Request body for persisting copy draft edits."""
+
+    topic_title: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("topic_title", "topicTitle"),
+    )
+    title: str = ""
+    body: str = ""
+
+
 class MessageImageAttachmentResponse(BaseModel):
     """Lightweight image attachment rendered below final answer."""
 
@@ -297,6 +308,15 @@ class CopyDraftContentResponse(BaseModel):
     @classmethod
     def from_record(cls, record: CopyDraftRecord) -> CopyDraftContentResponse:
         return cls(title=record.title, body=record.body)
+
+
+class CopyDraftResponse(BaseModel):
+    """Persisted copy draft DTO."""
+
+    topic_id: str
+    topic_title: str
+    copy_draft: CopyDraftContentResponse
+    updated_at: datetime
 
 
 class EditorImageResponse(BaseModel):
