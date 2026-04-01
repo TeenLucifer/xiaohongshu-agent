@@ -1,4 +1,4 @@
-# 025 Image Editor Frontend - Acceptance
+# 007 Image Editor Frontend - Acceptance
 
 ## 功能验收
 

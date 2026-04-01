@@ -20,7 +20,7 @@ from agent.models import RunRequest as AgentRunRequest
 from agent.models import ToolCallSummary
 from agent.run_events import RunEventSink
 from agent.runtime import AgentRuntime
-from agent.session.models import Session, SessionMessage
+from agent.session.models import Session, SessionImageAttachment, SessionMessage
 from agent.skills.loader import SkillRecord
 from agent.time_utils import now_local
 from agent.trace import SessionTraceCollector, TraceMode
@@ -29,8 +29,13 @@ from backend.schemas import (
     CandidatePostImageResponse,
     CopyDraftContentResponse,
     CreateTopicResponse,
+    DeleteImageResultResponse,
     DeleteTopicResponse,
+    EditorImageResponse,
+    EditorImagesResponse,
+    GeneratedImageResultResponse,
     LastRunResponse,
+    MessageImageAttachmentResponse,
     MessageResponse,
     MessagesResponse,
     PatternSummaryContentResponse,
@@ -45,12 +50,16 @@ from backend.schemas import (
     TopicListResponse,
     TopicMetaRecord,
     TopicSessionRecord,
+    UpdateEditorImageItemRequestBody,
     WorkspaceContextResponse,
     WorkspaceResponse,
 )
 from backend.topic_meta_store import TopicMetaStore
 from backend.topic_store import TopicSessionStore
 from backend.topic_truth_models import (
+    EditorImageRecord,
+    EditorImagesDocument,
+    GeneratedImageResultRecord,
     PostDetail,
     PostMetrics,
     SelectedPostRecord,
@@ -227,6 +236,7 @@ class BackendAppService:
         metadata: dict[str, Any],
     ) -> RunResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        previous_image_ids = self._list_generated_image_ids(session.session_id)
         trace_collector = self._build_trace_collector(session=session, user_input=user_input)
         try:
             result = self._run_runtime_request(
@@ -245,6 +255,11 @@ class BackendAppService:
                 details={"reason": str(exc)},
             ) from exc
 
+        fresh_session = self._runtime.session_manager.require(session.session_id)
+        self._attach_latest_generated_image(
+            session=fresh_session,
+            previous_image_ids=previous_image_ids,
+        )
         fresh_session = self._runtime.session_manager.require(session.session_id)
         record.updated_at = now_local()
         self._topic_store.save(record)
@@ -283,6 +298,7 @@ class BackendAppService:
         metadata: dict[str, Any],
     ) -> AsyncIterator[str]:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        previous_image_ids = self._list_generated_image_ids(session.session_id)
         trace_collector = self._build_trace_collector(session=session, user_input=user_input)
         event_queue: queue.Queue[StreamingRunEvent | None] = queue.Queue()
         run_id = uuid4().hex
@@ -307,6 +323,11 @@ class BackendAppService:
                     ),
                     trace_collector=trace_collector,
                     run_event_sink=run_event_sink,
+                )
+                fresh_session = self._runtime.session_manager.require(session.session_id)
+                self._attach_latest_generated_image(
+                    session=fresh_session,
+                    previous_image_ids=previous_image_ids,
                 )
                 fresh_session = self._runtime.session_manager.require(session.session_id)
                 record.updated_at = now_local()
@@ -389,6 +410,8 @@ class BackendAppService:
         selected_document = self._workspace_store.read_selected_posts(session.session_id)
         pattern_summary = self._workspace_store.read_pattern_summary(session.session_id)
         copy_draft = self._workspace_store.read_copy_draft(session.session_id)
+        editor_images = self._workspace_store.read_editor_images(session.session_id)
+        image_results = self._workspace_store.read_image_results(session.session_id)
         selected_items = selected_document.items if selected_document is not None else []
         selected_by_post_id = {item.post_id: item.manual_order for item in selected_items}
         candidate_posts = []
@@ -412,6 +435,10 @@ class BackendAppService:
             updated_at = pattern_summary.updated_at
         if copy_draft is not None and copy_draft.updated_at > updated_at:
             updated_at = copy_draft.updated_at
+        if editor_images is not None and editor_images.updated_at > updated_at:
+            updated_at = editor_images.updated_at
+        if image_results is not None and image_results.updated_at > updated_at:
+            updated_at = image_results.updated_at
 
         return WorkspaceContextResponse(
             topic_id=record.topic_id,
@@ -426,6 +453,22 @@ class BackendAppService:
                 CopyDraftContentResponse.from_record(copy_draft)
                 if copy_draft is not None
                 else None
+            ),
+            editor_images=(
+                [
+                    self._convert_editor_image(topic_id=topic_id, record=item)
+                    for item in sorted(editor_images.items, key=lambda image: image.order)
+                ]
+                if editor_images is not None
+                else []
+            ),
+            image_results=(
+                [
+                    self._convert_generated_image_result(topic_id=topic_id, record=item)
+                    for item in image_results.items
+                ]
+                if image_results is not None
+                else []
             ),
             updated_at=updated_at,
         )
@@ -481,6 +524,98 @@ class BackendAppService:
             ],
             updated_at=updated_at,
         )
+
+    def get_editor_images(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+    ) -> EditorImagesResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        document = self._workspace_store.read_editor_images(session.session_id)
+        updated_at = document.updated_at if document is not None else record.updated_at
+        return EditorImagesResponse(
+            topic_id=record.topic_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            items=(
+                [
+                    self._convert_editor_image(topic_id=topic_id, record=item)
+                    for item in sorted(document.items, key=lambda image: image.order)
+                ]
+                if document is not None
+                else []
+            ),
+            updated_at=updated_at,
+        )
+
+    def update_editor_images(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        items: list[UpdateEditorImageItemRequestBody],
+    ) -> EditorImagesResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        updated_at = now_local()
+        normalized_items: list[EditorImageRecord] = []
+        seen_ids: set[str] = set()
+        for item in sorted(items, key=lambda current: current.order):
+            if item.id in seen_ids:
+                continue
+            seen_ids.add(item.id)
+            normalized_items.append(
+                EditorImageRecord(
+                    id=item.id,
+                    order=len(normalized_items) + 1,
+                    source_type=item.source_type,
+                    source_post_id=item.source_post_id,
+                    source_image_id=item.source_image_id,
+                    source_generated_image_id=item.source_generated_image_id,
+                    image_path=item.image_path,
+                    alt=item.alt,
+                )
+            )
+        document = self._workspace_store.write_editor_images(
+            session.session_id,
+            EditorImagesDocument(items=normalized_items, updated_at=updated_at),
+        )
+        record.updated_at = updated_at
+        self._topic_store.save(record)
+        self._sync_topic_meta(record, description=None)
+        return EditorImagesResponse(
+            topic_id=record.topic_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            items=[
+                self._convert_editor_image(topic_id=topic_id, record=item)
+                for item in document.items
+            ],
+            updated_at=updated_at,
+        )
+
+    def delete_image_result(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        image_id: str,
+    ) -> DeleteImageResultResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        document = self._workspace_store.read_image_results(session.session_id)
+        updated_at = now_local()
+        if document is not None:
+            self._workspace_store.write_image_results(
+                session.session_id,
+                document.model_copy(
+                    update={
+                        "items": [item for item in document.items if item.id != image_id],
+                        "updated_at": updated_at,
+                    }
+                ),
+            )
+            record.updated_at = updated_at
+            self._topic_store.save(record)
+            self._sync_topic_meta(record, description=None)
+        return DeleteImageResultResponse(deleted_image_id=image_id, updated_at=updated_at)
 
     def reset_topic(self, *, topic_id: str, topic_title: str) -> ResetResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
@@ -592,6 +727,7 @@ class BackendAppService:
                         role="user",
                         text=message.content,
                         time=_format_message_time(message.timestamp),
+                        image_attachments=[],
                     )
                 )
                 continue
@@ -615,6 +751,18 @@ class BackendAppService:
                         time=_format_message_time(message.timestamp),
                         agent_name=message.name or "协作 Agent",
                         tool_summary=pending_tool_summaries.copy(),
+                        image_attachments=[
+                            MessageImageAttachmentResponse(
+                                image_url=_to_topic_asset_url(
+                                    topic_id=cast(str, session.metadata.get("topic_id")),
+                                    relative_path=attachment.image_path,
+                                ),
+                                alt=attachment.alt,
+                            )
+                            for attachment in message.image_attachments
+                        ]
+                        if session.metadata.get("topic_id")
+                        else [],
                     )
                 )
                 pending_tool_calls = {}
@@ -726,6 +874,10 @@ class BackendAppService:
                             relative_path=asset.path,
                         ),
                     ),
+                    imagePath=_to_workspace_asset_path(
+                        post_id=detail.post_id,
+                        relative_path=asset.path,
+                    ),
                     alt=f"{detail.title} 图片 {asset.order}",
                 )
                 for asset in detail.media
@@ -735,6 +887,7 @@ class BackendAppService:
                 CandidatePostImageResponse(
                     id=f"{detail.post_id}-cover",
                     imageUrl=cover_image_url,
+                    imagePath="",
                     alt=f"{detail.title} 封面图",
                 )
             ]
@@ -755,6 +908,61 @@ class BackendAppService:
                 ),
             )
         return ""
+
+    def _convert_editor_image(
+        self,
+        *,
+        topic_id: str,
+        record: EditorImageRecord,
+    ) -> EditorImageResponse:
+        return EditorImageResponse.from_record(
+            record,
+            image_url=_to_topic_asset_url(topic_id=topic_id, relative_path=record.image_path),
+        )
+
+    def _convert_generated_image_result(
+        self,
+        *,
+        topic_id: str,
+        record: GeneratedImageResultRecord,
+    ) -> GeneratedImageResultResponse:
+        return GeneratedImageResultResponse.from_record(
+            record,
+            image_url=_to_topic_asset_url(topic_id=topic_id, relative_path=record.image_path),
+        )
+
+    def _list_generated_image_ids(self, session_id: str) -> set[str]:
+        document = self._workspace_store.read_image_results(session_id)
+        if document is None:
+            return set()
+        return {item.id for item in document.items}
+
+    def _attach_latest_generated_image(
+        self,
+        *,
+        session: Session,
+        previous_image_ids: set[str],
+    ) -> None:
+        document = self._workspace_store.read_image_results(session.session_id)
+        if document is None:
+            return
+        new_item = next(
+            (item for item in reversed(document.items) if item.id not in previous_image_ids),
+            None,
+        )
+        if new_item is None:
+            return
+        for index in range(len(session.messages) - 1, -1, -1):
+            message = session.messages[index]
+            if message.role != "assistant" or message.tool_calls:
+                continue
+            message.image_attachments = [
+                SessionImageAttachment(image_path=new_item.image_path, alt=new_item.alt)
+            ]
+            session.messages[index] = message
+            session.updated_at = now_local()
+            self._runtime.session_manager.save(session)
+            return
 
 
 def _format_message_time(value: datetime) -> str:

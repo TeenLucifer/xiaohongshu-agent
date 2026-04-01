@@ -75,6 +75,7 @@
 - 第一版后端只服务前端主栏对话
 - 第一版前端接入范围只包含主栏，不包含右侧工作区真实化
 - 第一版主栏 API 不负责候选帖子、总结、文案、图片结果等 session workspace 对象
+- 随着 `025-image-generation-skill` 接入，主栏消息 DTO 允许附带轻量图片附件元数据
 - 后端返回薄 DTO，不直接暴露 runtime 内部模型
 - 错误返回采用最小清晰结构，不做复杂任务状态机
 - 本地开发拓扑固定为：
@@ -209,6 +210,7 @@
 - `text`
 - `time`
 - 可选 `agent_name`
+- 可选 `image_attachments`
 
 约束：
 
@@ -218,6 +220,7 @@
 - runtime 的 `tool` 消息不直接进入前端主栏消息列表
 - `user` 消息映射为前端 `user`
 - `assistant` 消息映射为前端 `agent`
+- `image_attachments` 只附着在 final answer 对应的 agent 消息上
 - `id` 可由后端按 `session_id + message_index` 稳定生成
 
 ### WorkspaceResponse

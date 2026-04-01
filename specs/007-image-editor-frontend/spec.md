@@ -1,4 +1,4 @@
-# 025 Image Editor Frontend
+# 007 Image Editor Frontend
 
 ## 背景
 
@@ -14,12 +14,15 @@
 - 下半部分展示编辑区图片（用户选择的图片，带编号）
 - 支持拖拽添加、点击移除
 - 编号全局连续，移除后自动重排
+- 编辑区图片状态持久化到 `editor_images.json`
+- 支持接收生成结果区的图片拖入编辑区
 
 ## 非目标
 
 - 图片编辑功能（裁剪、滤镜等）
 - 图片上传功能
 - 多话题图片混用
+- 图片真实生成本身
 
 ## 用户故事
 
@@ -41,6 +44,8 @@
 - 编号显示在图片左上角
 - 点击图片可移除
 - 移除后编号自动重排
+- 编辑区图片既可来自搜索素材，也可来自生成结果
+- 生成结果图进入编辑区的方式与素材图一致：拖拽进入，不提供单独“加入”按钮
 
 ### 拖拽行为
 
@@ -63,12 +68,12 @@ interface MaterialImage {
 
 // 编辑区图片
 interface EditorImage {
-  id: string;           // 唯一 ID
-  order: number;        // 编号 1, 2, 3...
-  sourcePostId: string; // 来源帖子 ID
+  id: string;            // 唯一 ID
+  order: number;         // 编号 1, 2, 3...
+  sourcePostId: string;  // 来源帖子 ID
   sourceImageId: string; // 来源图片 ID
-  imageUrl: string;     // 图片 URL
-  alt: string;          // 描述
+  imageUrl: string;      // 图片 URL
+  alt: string;           // 描述
 }
 ```
 
@@ -79,3 +84,4 @@ interface EditorImage {
 - [ ] 拖拽图片到编辑区，显示编号
 - [ ] 移除图片后编号重排
 - [ ] 编辑区图片状态持久化到后端
+- [ ] 可从生成结果区拖拽图片到编辑区

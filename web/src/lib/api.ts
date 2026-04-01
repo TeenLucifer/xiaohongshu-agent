@@ -2,6 +2,8 @@ import type {
   CandidatePost,
   ChatMessage,
   CopyDraftContent,
+  EditorImage,
+  GeneratedImageResult,
   PatternSummaryContent,
   TopicCard,
 } from "../types/workspace";
@@ -15,6 +17,10 @@ export interface ApiChatMessage {
   text: string;
   time: string;
   agent_name?: string | null;
+  image_attachments?: Array<{
+    image_url: string;
+    alt: string;
+  }>;
   tool_summary?: Array<{
     name: string;
     arguments_summary: string;
@@ -75,6 +81,20 @@ export interface WorkspaceContextApiResponse {
   candidate_posts: CandidatePost[];
   pattern_summary: PatternSummaryContent | null;
   copy_draft: CopyDraftContent | null;
+  editor_images: EditorImage[];
+  image_results: GeneratedImageResult[];
+  updated_at: string;
+}
+
+export interface EditorImagesApiResponse {
+  topic_id: string;
+  topic_title: string;
+  items: EditorImage[];
+  updated_at: string;
+}
+
+export interface DeleteImageResultApiResponse {
+  deleted_image_id: string;
   updated_at: string;
 }
 
@@ -177,6 +197,10 @@ export function toChatMessages(messages: ApiChatMessage[]): ChatMessage[] {
     text: message.text,
     time: message.time,
     agentName: message.agent_name ?? undefined,
+    imageAttachments: (message.image_attachments ?? []).map((item) => ({
+      imageUrl: toAbsoluteApiUrl(item.image_url),
+      alt: item.alt,
+    })),
     toolSummary: (message.tool_summary ?? []).map((item) => ({
       name: item.name,
       argumentsSummary: item.arguments_summary,
@@ -354,8 +378,77 @@ export async function getWorkspaceContext(
         ...image,
         imageUrl: toAbsoluteApiUrl(image.imageUrl)
       }))
+    })),
+    editor_images: (response.editor_images ?? []).map((image) => ({
+      ...image,
+      imageUrl: toAbsoluteApiUrl(image.imageUrl),
+    })),
+    image_results: (response.image_results ?? []).map((image) => ({
+      ...image,
+      imageUrl: toAbsoluteApiUrl(image.imageUrl),
     }))
   };
+}
+
+export async function getEditorImages(
+  topicId: string,
+  topicTitle: string
+): Promise<EditorImagesApiResponse> {
+  const params = new URLSearchParams({ topic_title: topicTitle });
+  const response = await requestJson<EditorImagesApiResponse>(
+    `/api/topics/${topicId}/editor-images?${params.toString()}`
+  );
+  return {
+    ...response,
+    items: (response.items ?? []).map((image) => ({
+      ...image,
+      imageUrl: toAbsoluteApiUrl(image.imageUrl),
+    })),
+  };
+}
+
+export async function updateEditorImages(
+  topicId: string,
+  topicTitle: string,
+  items: EditorImage[]
+): Promise<EditorImagesApiResponse> {
+  const response = await requestJson<EditorImagesApiResponse>(`/api/topics/${topicId}/editor-images`, {
+    method: "PUT",
+    body: JSON.stringify({
+      topic_title: topicTitle,
+      items: items.map((image) => ({
+        id: image.id,
+        order: image.order,
+        source_type: image.sourceType,
+        source_post_id: image.sourcePostId ?? null,
+        source_image_id: image.sourceImageId ?? null,
+        source_generated_image_id: image.sourceGeneratedImageId ?? null,
+        image_path: image.imagePath,
+        alt: image.alt,
+      })),
+    }),
+  });
+  return {
+    ...response,
+    items: (response.items ?? []).map((image) => ({
+      ...image,
+      imageUrl: toAbsoluteApiUrl(image.imageUrl),
+    })),
+  };
+}
+
+export async function deleteImageResult(
+  topicId: string,
+  topicTitle: string,
+  imageId: string
+): Promise<DeleteImageResultApiResponse> {
+  const params = new URLSearchParams({ topic_title: topicTitle });
+  return requestJson<DeleteImageResultApiResponse>(
+    `/api/topics/${topicId}/image-results/${imageId}?${params.toString()}`,
+    {
+      method: "DELETE",
+    }
+  );
 }
 
 export async function updateSelectedPosts(

@@ -3,7 +3,7 @@ import type {
   ChatMessage,
   ConversationEntry,
   CopyDraftContent,
-  ImageTaskGroup,
+  GeneratedImageResult,
   PatternSummaryContent,
   TopicCard,
   TopicMaterialPreview,
@@ -31,6 +31,7 @@ function buildCandidateImages(...urls: string[]) {
   return urls.map((imageUrl, index) => ({
     id: `image-${index + 1}`,
     imageUrl,
+    imagePath: imageUrl.startsWith("/") ? imageUrl.slice(1) : imageUrl,
     alt: `候选帖图片 ${index + 1}`
   }));
 }
@@ -175,29 +176,34 @@ export const mockCopyDraftByTopicId: Record<string, CopyDraftContent> = {
   }
 };
 
-export const mockImageTasksByTopicId: Record<string, ImageTaskGroup[]> = {
+export const mockImageResultsByTopicId: Record<string, GeneratedImageResult[]> = {
   "topic-spring-commute": [
     {
-      id: "task-text-to-image",
-      mode: "text-to-image",
-      title: "文生图",
-      summary: "基于当前文案和模式总结生成封面与内页草图。",
-      images: [
-        { id: "tti-cover-1", kind: "cover", alt: "文生图封面候选图 1", imageUrl: createSvgCover("封面 1", "#d26f54", "#8a2d1b") },
-        { id: "tti-inner-1", kind: "inner", alt: "文生图内页候选图 1", imageUrl: createSvgCover("内页 1", "#e8b071", "#a05920") },
-        { id: "tti-inner-2", kind: "inner", alt: "文生图内页候选图 2", imageUrl: createSvgCover("内页 2", "#efc59f", "#ad6d30") }
-      ]
+      id: "gen-1",
+      alt: "文生图封面候选图 1",
+      imageUrl: createSvgCover("封面 1", "#d26f54", "#8a2d1b"),
+      imagePath: "generated_images/gen-1.png",
+      prompt: "生成一张通勤穿搭封面图",
+      sourceEditorImageIds: ["editor-1"],
+      createdAt: "2026-03-30T10:00:00+08:00",
     },
     {
-      id: "task-image-to-image",
-      mode: "image-to-image",
-      title: "图生图",
-      summary: "基于素材图和参考帖封面生成更接近选题氛围的候选图。",
-      images: [
-        { id: "iti-cover-1", kind: "cover", alt: "图生图封面候选图 1", imageUrl: createSvgCover("封面 2", "#b87d66", "#5f3627") },
-        { id: "iti-inner-1", kind: "inner", alt: "图生图内页候选图 1", imageUrl: createSvgCover("内页 3", "#d1a786", "#7f4d32") },
-        { id: "iti-inner-2", kind: "inner", alt: "图生图内页候选图 2", imageUrl: createSvgCover("内页 4", "#e1c4b0", "#8b6248") }
-      ]
+      id: "gen-2",
+      alt: "图生图封面候选图 1",
+      imageUrl: createSvgCover("封面 2", "#b87d66", "#5f3627"),
+      imagePath: "generated_images/gen-2.png",
+      prompt: "参考 1 号图风格，把 2 号图主体替换进去",
+      sourceEditorImageIds: ["editor-1", "editor-2"],
+      createdAt: "2026-03-30T10:01:00+08:00",
+    },
+    {
+      id: "gen-3",
+      alt: "图生图内页候选图 2",
+      imageUrl: createSvgCover("内页 4", "#e1c4b0", "#8b6248"),
+      imagePath: "generated_images/gen-3.png",
+      prompt: "生成一张同风格内页图",
+      sourceEditorImageIds: ["editor-1"],
+      createdAt: "2026-03-30T10:02:00+08:00",
     }
   ],
   "topic-small-rental": []

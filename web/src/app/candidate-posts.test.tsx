@@ -110,6 +110,26 @@ describe("candidate posts feature", () => {
     expect(within(dialog).getByRole("img", { name: "候选帖图片 2" })).toBeInTheDocument();
   });
 
+  it("opens a lightbox when clicking the detail image and supports preview navigation", async () => {
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: /春日通勤西装 3 套搭法/ }));
+    const detailDialog = screen.getByRole("dialog", { name: "春日通勤西装 3 套搭法" });
+
+    await user.click(within(detailDialog).getByRole("img", { name: "候选帖图片 1" }));
+    const lightbox = screen.getByRole("dialog", { name: "图片预览" });
+    expect(within(lightbox).getByRole("img", { name: "候选帖图片 1" })).toBeInTheDocument();
+
+    await user.click(within(lightbox).getByRole("button", { name: "下一张预览图片" }));
+    expect(within(lightbox).getByRole("img", { name: "候选帖图片 2" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "图片预览" })).not.toBeInTheDocument();
+    });
+  });
+
   it("keeps single-image posts on the current detail layout without paging controls", async () => {
     const user = userEvent.setup();
     await renderWorkspace();

@@ -28,11 +28,14 @@
 - [x] 保持右侧 `GET /api/topics/{topic_id}/context` 接口不变，但底层读取来源切换到 active session。
 - [x] 保持资源读取路径不变，但底层资源路径切换到 session workspace。
 - [x] 接通前端 `candidatePosts` 与 `patternSummary` 对新的 session workspace 真实 API 的读取。
-- [x] 保持 `materials`、`collector`、`imageResults` 继续使用 mock。
+- [x] 保持 `materials`、`collector` 继续使用 mock。
 - [x] 将 `candidatePosts` 的后端读取来源改为 `posts/ + selected_posts.json`
 - [x] 移除 `candidate_posts.json` 作为正式真相层文件
 - [x] 为 `selected_posts.json` 增加最小写回链路：加入、移除、顺序调整
 - [x] 接通 `copyDraft` 的真实读取链路，移除前端对 mock 文案的运行时依赖
+- [x] 补充 `editor_images.json` 真相层与 GET/PUT API
+- [x] 将 `image_results.json` 改为单列表真实读取/写入，并通过 `context` 返回
+- [x] 为 assistant final message 增加图片附件元数据，支持主栏引用结果图
 
 ## 备注
 

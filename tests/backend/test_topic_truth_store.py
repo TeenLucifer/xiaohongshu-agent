@@ -7,9 +7,10 @@ from backend.topic_truth_models import (
     CandidatePostRecord,
     CandidatePostsDocument,
     CopyDraftRecord,
-    ImageCandidateRecord,
+    EditorImageRecord,
+    EditorImagesDocument,
+    GeneratedImageResultRecord,
     ImageResultsRecord,
-    ImageTaskGroupRecord,
     PatternSummaryRecord,
     PostAuthor,
     PostContent,
@@ -33,6 +34,7 @@ def test_initialize_workspace_creates_workspace_root_and_posts_root(tmp_path: Pa
     assert root == tmp_path / "data" / "sessions" / "session-demo" / "workspace"
     assert root.exists()
     assert (root / "posts").exists()
+    assert (root / "generated_images").exists()
 
 
 def test_meta_round_trip(tmp_path: Path) -> None:
@@ -96,21 +98,29 @@ def test_pattern_summary_copy_draft_and_image_results_round_trip(tmp_path: Path)
         source_summary_version=now.isoformat(),
         updated_at=now,
     )
+    editor_images = EditorImagesDocument(
+        items=[
+            EditorImageRecord(
+                id="editor-1",
+                order=1,
+                source_type="material",
+                source_post_id="xhs-1",
+                source_image_id="image-01",
+                alt="参考图 1",
+                image_path="posts/xhs-1/assets/image-01.jpg",
+            )
+        ],
+        updated_at=now,
+    )
     images = ImageResultsRecord(
-        groups=[
-            ImageTaskGroupRecord(
-                id="task-1",
-                mode="text-to-image",
-                title="文生图",
-                summary="封面图候选",
-                images=[
-                    ImageCandidateRecord(
-                        id="cover-1",
-                        kind="cover",
-                        alt="封面候选图",
-                        image_path="generated/cover-1.png",
-                    )
-                ],
+        items=[
+            GeneratedImageResultRecord(
+                id="gen-1",
+                image_path="generated_images/gen-1.png",
+                alt="封面候选图",
+                prompt="参考 1 号图的风格生成封面",
+                source_editor_image_ids=["editor-1"],
+                created_at=now,
             )
         ],
         updated_at=now,
@@ -118,10 +128,12 @@ def test_pattern_summary_copy_draft_and_image_results_round_trip(tmp_path: Path)
 
     store.write_pattern_summary("session-demo", summary)
     store.write_copy_draft("session-demo", draft)
+    store.write_editor_images("session-demo", editor_images)
     store.write_image_results("session-demo", images)
 
     assert store.read_pattern_summary("session-demo") == summary
     assert store.read_copy_draft("session-demo") == draft
+    assert store.read_editor_images("session-demo") == editor_images
     assert store.read_image_results("session-demo") == images
 
 

@@ -3,6 +3,7 @@ import { ArrowDown, ArrowUp, Check, ExternalLink, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "../lib/cn";
 import type { CandidatePost } from "../types/workspace";
+import { ImageLightbox } from "./ImageLightbox";
 import { Button } from "./ui/Button";
 
 function buildInitialOrder(posts: CandidatePost[]): string[] {
@@ -61,10 +62,17 @@ export function CandidatePostsSection({
 }): JSX.Element {
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const selectedOrder = useMemo(() => buildInitialOrder(posts), [posts]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
+      if (lightboxIndex !== null) {
+        if (event.key === "Escape") {
+          setLightboxIndex(null);
+        }
+        return;
+      }
       if (event.key === "Escape") {
         setActivePostId(null);
         return;
@@ -93,7 +101,7 @@ export function CandidatePostsSection({
       document.removeEventListener("keydown", handleKeyDown);
       document.body.style.overflow = "";
     };
-  }, [activePostId, posts]);
+  }, [activePostId, lightboxIndex, posts]);
 
   const displayPosts = useMemo(() => sortPosts(posts, selectedOrder), [posts, selectedOrder]);
   const activePost = displayPosts.find((post) => post.id === activePostId) ?? null;
@@ -103,6 +111,7 @@ export function CandidatePostsSection({
 
   useEffect(() => {
     setActiveImageIndex(0);
+    setLightboxIndex(null);
   }, [activePostId]);
 
   function commitSelectedOrder(nextSelectedOrder: string[]): void {
@@ -206,7 +215,8 @@ export function CandidatePostsSection({
                 <div>
                   <img
                     alt={currentImage?.alt ?? `${activePost.title} 详情图`}
-                    className="aspect-[3/4] w-full rounded-[22px] object-cover"
+                    className="aspect-[3/4] w-full cursor-zoom-in rounded-[22px] object-cover"
+                    onClick={() => setLightboxIndex(activeImageIndex)}
                     src={currentImage?.imageUrl ?? activePost.imageUrl}
                   />
                   {hasMultipleImages ? (
@@ -297,6 +307,14 @@ export function CandidatePostsSection({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      <ImageLightbox
+        images={activeImages.map((image) => ({ imageUrl: image.imageUrl, alt: image.alt }))}
+        index={lightboxIndex ?? 0}
+        onClose={() => setLightboxIndex(null)}
+        onIndexChange={setLightboxIndex}
+        open={lightboxIndex !== null}
+      />
     </>
   );
 }

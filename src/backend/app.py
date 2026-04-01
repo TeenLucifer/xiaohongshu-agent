@@ -20,6 +20,7 @@ from backend.schemas import (
     ErrorResponse,
     ResetRequestBody,
     RunRequestBody,
+    UpdateEditorImagesRequestBody,
     UpdateSelectedPostsRequestBody,
 )
 from backend.service import BackendApiError, BackendAppService
@@ -211,6 +212,42 @@ def create_app(
             topic_id=topic_id,
             topic_title=payload.topic_title,
             post_ids=payload.post_ids,
+        )
+
+    @app.get("/api/topics/{topic_id}/editor-images")
+    async def get_editor_images(
+        request: Request,
+        topic_id: str,
+        topic_title: Annotated[str, Query(min_length=1)],
+    ) -> Any:
+        return request.app.state.backend_service.get_editor_images(
+            topic_id=topic_id,
+            topic_title=topic_title,
+        )
+
+    @app.put("/api/topics/{topic_id}/editor-images")
+    async def update_editor_images(
+        request: Request,
+        topic_id: str,
+        payload: UpdateEditorImagesRequestBody,
+    ) -> Any:
+        return request.app.state.backend_service.update_editor_images(
+            topic_id=topic_id,
+            topic_title=payload.topic_title,
+            items=payload.items,
+        )
+
+    @app.delete("/api/topics/{topic_id}/image-results/{image_id}")
+    async def delete_image_result(
+        request: Request,
+        topic_id: str,
+        image_id: str,
+        topic_title: Annotated[str, Query(min_length=1)],
+    ) -> Any:
+        return request.app.state.backend_service.delete_image_result(
+            topic_id=topic_id,
+            topic_title=topic_title,
+            image_id=image_id,
         )
 
     @app.get("/api/topics/{topic_id}/assets/{asset_path:path}")

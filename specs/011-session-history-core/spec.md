@@ -124,6 +124,7 @@
   - `tool_calls`
   - `tool_call_id`
   - `name`
+  - 可选图片附件元数据
 
 ### reset_session(...)`
 
@@ -151,6 +152,7 @@
   - 第一行写 metadata
   - 后续每行写一条 message
 - metadata 行必须保存 `last_consolidated`
+- assistant final message 允许附带轻量图片附件信息，用于前端在 final answer 下展示代表图
 - 内存中维护完整 `Session`
 - 每次 `save` 重写整个 session 文件
 - session 创建后，默认工作目录必须已经可直接供 filesystem tools 使用

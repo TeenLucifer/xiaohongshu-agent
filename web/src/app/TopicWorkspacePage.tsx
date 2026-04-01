@@ -7,25 +7,28 @@ import { CandidatePostsSection } from "../components/CandidatePostsSection";
 import { ContextPanelGroup } from "../components/ContextPanelGroup";
 import { CopyDraftSummaryPanel } from "../components/CopyDraftSummaryPanel";
 import { ImageEditorSection } from "../components/ImageEditorSection";
+import { ImageResultsPanel } from "../components/ImageResultsPanel";
 import { PatternSummarySection } from "../components/PatternSummarySection";
 import { WorkspaceSidebar } from "../components/WorkspaceSidebar";
 import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Surface } from "../components/ui/Surface";
 import {
+  deleteImageResult,
   deleteTopic,
   getWorkspace,
   getWorkspaceContext,
+  getMessages,
   listTopics,
   runTopic,
   streamTopicRun,
   toChatMessages,
   toTopicCards,
+  updateEditorImages,
   updateSelectedPosts,
 } from "../lib/api";
 import {
   mockChatMessagesByTopicId,
-  mockImageTasksByTopicId,
   mockMaterialPreviewByTopicId,
 } from "../data/mockTopics";
 import type {
@@ -33,6 +36,7 @@ import type {
   ChatMessage,
   CopyDraftContent,
   EditorImage,
+  GeneratedImageResult,
   MaterialImage,
   PatternSummaryContent,
   ToolSummaryItem,
@@ -71,14 +75,14 @@ function buildWorkspaceSections({
   candidatePosts,
   copyDraft,
   hasMessages,
-  imageGroupCount,
+  imageResultCount,
   isSending,
   patternSummary,
 }: {
   candidatePosts: CandidatePost[];
   copyDraft: CopyDraftContent | undefined;
   hasMessages: boolean;
-  imageGroupCount: number;
+  imageResultCount: number;
   isSending: boolean;
   patternSummary: PatternSummaryContent | undefined;
 }): WorkspaceSection[] {
@@ -118,8 +122,8 @@ function buildWorkspaceSections({
     {
       id: "imageResults",
       title: "图片",
-      status: imageGroupCount > 0 ? "success" : "empty",
-      summary: imageGroupCount > 0 ? "当前图片结果已准备就绪。" : "还没有图片结果。",
+      status: imageResultCount > 0 ? "success" : "empty",
+      summary: imageResultCount > 0 ? `当前已生成 ${imageResultCount} 张图片。` : "还没有图片结果。",
     },
     {
       id: "conversationTimeline",
@@ -154,6 +158,7 @@ export function TopicWorkspacePage(): JSX.Element {
   const [candidatePosts, setCandidatePosts] = useState<CandidatePost[]>([]);
   const [patternSummary, setPatternSummary] = useState<PatternSummaryContent | undefined>();
   const [editorImages, setEditorImages] = useState<EditorImage[]>([]);
+  const [imageResults, setImageResults] = useState<GeneratedImageResult[]>([]);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isDeletingTopic, setIsDeletingTopic] = useState(false);
@@ -193,6 +198,8 @@ export function TopicWorkspacePage(): JSX.Element {
     setCandidatePosts(response.candidate_posts);
     setPatternSummary(response.pattern_summary ?? undefined);
     setCopyDraft(response.copy_draft ?? undefined);
+    setEditorImages(response.editor_images ?? []);
+    setImageResults(response.image_results ?? []);
   }
 
   useEffect(() => {
@@ -203,6 +210,8 @@ export function TopicWorkspacePage(): JSX.Element {
     // candidatePosts / patternSummary 已接真实后端，不再先注入 mock，避免切换 topic 时闪现旧假数据。
     setCandidatePosts([]);
     setPatternSummary(undefined);
+    setEditorImages([]);
+    setImageResults([]);
     setIsSidebarCollapsed(false);
   }, [topicId]);
 
@@ -255,6 +264,8 @@ export function TopicWorkspacePage(): JSX.Element {
           setCandidatePosts([]);
           setPatternSummary(undefined);
           setCopyDraft(undefined);
+          setEditorImages([]);
+          setImageResults([]);
         }
       });
 
@@ -269,11 +280,11 @@ export function TopicWorkspacePage(): JSX.Element {
         candidatePosts,
         copyDraft,
         hasMessages: messages.length > 0,
-        imageGroupCount: (mockImageTasksByTopicId[topicId] ?? []).length,
+        imageResultCount: imageResults.length,
         isSending,
         patternSummary,
       }),
-    [candidatePosts, copyDraft, isSending, messages.length, patternSummary, topicId]
+    [candidatePosts, copyDraft, imageResults.length, isSending, messages.length, patternSummary]
   );
 
   const sectionsById = useMemo(() => {
@@ -411,6 +422,8 @@ export function TopicWorkspacePage(): JSX.Element {
           setMessagesError(String(event.payload.message ?? "运行失败"));
         }
       });
+      const latestMessages = await getMessages(topicId, topic.title);
+      setMessages(toChatMessages(latestMessages.messages));
       await loadWorkspaceContext(topicId, topic.title);
     } catch (error: unknown) {
       setMessages(previousMessages);
@@ -480,6 +493,39 @@ export function TopicWorkspacePage(): JSX.Element {
     }
   }
 
+  async function handleEditorImagesChange(nextImages: EditorImage[]): Promise<void> {
+    if (topic === undefined) {
+      return;
+    }
+    const previousImages = editorImages;
+    setEditorImages(nextImages);
+    setMessagesError(null);
+    try {
+      const response = await updateEditorImages(topicId, topic.title, nextImages);
+      setEditorImages(response.items);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "保存编辑区图片失败";
+      setMessagesError(message);
+      setEditorImages(previousImages);
+    }
+  }
+
+  async function handleRemoveGeneratedImage(imageId: string): Promise<void> {
+    if (topic === undefined) {
+      return;
+    }
+    const previousResults = imageResults;
+    setImageResults((current) => current.filter((item) => item.id !== imageId));
+    setMessagesError(null);
+    try {
+      await deleteImageResult(topicId, topic.title, imageId);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "删除图片结果失败";
+      setMessagesError(message);
+      setImageResults(previousResults);
+    }
+  }
+
   // 从 candidatePosts 收集所有图片作为素材
   const materialImages: MaterialImage[] = useMemo(() => {
     const images: MaterialImage[] = [];
@@ -490,6 +536,7 @@ export function TopicWorkspacePage(): JSX.Element {
           postId: post.id,
           postTitle: post.title,
           imageUrl: img.imageUrl,
+          imagePath: img.imagePath,
           alt: img.alt,
         });
       }
@@ -518,7 +565,6 @@ export function TopicWorkspacePage(): JSX.Element {
   }
 
   const materials = mockMaterialPreviewByTopicId[topicId] ?? [];
-  const imageGroups = mockImageTasksByTopicId[topicId] ?? [];
 
   return (
     <motion.main
@@ -819,8 +865,15 @@ export function TopicWorkspacePage(): JSX.Element {
                       <ImageEditorSection
                         editorImages={editorImages}
                         materialImages={materialImages}
-                        onEditorImagesChange={setEditorImages}
+                        onEditorImagesChange={(nextImages) => void handleEditorImagesChange(nextImages)}
                       />
+                      <div className="mt-4 border-t border-slate-100 pt-4">
+                        <p className="mb-2 text-xs font-medium text-slate-500">生成结果 ({imageResults.length})</p>
+                        <ImageResultsPanel
+                          onRemove={(imageId) => void handleRemoveGeneratedImage(imageId)}
+                          results={imageResults}
+                        />
+                      </div>
                     </ContextPanelGroup>
                   ) : null}
                 </>

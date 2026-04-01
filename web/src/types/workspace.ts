@@ -52,6 +52,7 @@ export interface CandidatePost {
 export interface CandidatePostImage {
   id: string;
   imageUrl: string;
+  imagePath: string;
   alt: string;
 }
 
@@ -69,21 +70,14 @@ export interface CopyDraftContent {
   body: string;
 }
 
-export type ImageTaskMode = "text-to-image" | "image-to-image";
-
-export interface ImageCandidate {
+export interface GeneratedImageResult {
   id: string;
-  kind: "cover" | "inner";
-  alt: string;
   imageUrl: string;
-}
-
-export interface ImageTaskGroup {
-  id: string;
-  mode: ImageTaskMode;
-  title: string;
-  summary: string;
-  images: ImageCandidate[];
+  imagePath: string;
+  alt: string;
+  prompt: string;
+  sourceEditorImageIds: string[];
+  createdAt: string;
 }
 
 export type ConversationStatus = "completed" | "running" | "failed";
@@ -116,7 +110,13 @@ export interface ChatMessage {
   agentName?: string;
   type?: ChatMessageType;
   toolSummary?: ToolSummaryItem[];
+  imageAttachments?: MessageImageAttachment[];
   status?: "streaming" | "completed" | "failed";
+}
+
+export interface MessageImageAttachment {
+  imageUrl: string;
+  alt: string;
 }
 
 // 素材图片（来自搜索结果）
@@ -125,6 +125,7 @@ export interface MaterialImage {
   postId: string;
   postTitle: string;
   imageUrl: string;
+  imagePath: string;
   alt: string;
 }
 
@@ -132,8 +133,11 @@ export interface MaterialImage {
 export interface EditorImage {
   id: string;
   order: number;
-  sourcePostId: string;
-  sourceImageId: string;
+  sourceType: "material" | "generated";
+  sourcePostId?: string;
+  sourceImageId?: string;
+  sourceGeneratedImageId?: string;
   imageUrl: string;
+  imagePath: string;
   alt: string;
 }

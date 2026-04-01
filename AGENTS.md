@@ -41,6 +41,10 @@
 
 ### 前端工作台
 
+- `007-image-editor-frontend`
+  - 右侧“创作”tab 中的图片编辑区、素材图拖拽与编辑区编号
+- `008-image-lightbox-preview`
+  - 候选帖子、图片结果和图片编辑器中的统一大图预览弹层
 - `005-home-entry`
   - 首页“新话题”入口、历史话题次入口与左侧“新话题”导航
 - `006-skills-page`
@@ -116,6 +120,8 @@
 - `024-image-analysis-skill`
   - 调用视觉 API 分析帖子图片，返回结构化文本分析结果
   - 供 pattern-summary 等技能消费
+- `025-image-generation-skill`
+  - 基于编辑区参考图与用户提示词生成图片，并写回 `generated_images/` 与 `image_results.json`
 
 ### 后端与集成
 

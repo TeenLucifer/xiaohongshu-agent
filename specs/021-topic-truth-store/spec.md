@@ -21,7 +21,6 @@
 - 数据库
 - 搜索索引
 - 复杂任务编排
-- `imageResults`、`materials`、`collector` 的本轮真实化
 - 候选帖子选择/排序写回
 - 文案编辑写回
 
@@ -65,6 +64,9 @@
   - `candidatePosts`
   - `patternSummary`
   - `copyDraft`
+- 当前新增真实化覆盖：
+  - `editorImages`
+  - `imageResults`
 - 第一波右侧读取链路以只读为主，但 `selected_posts.json` 已支持最小写回交互
 - 进入后续总结、文案、图片等流程时，默认只消费 `selected_posts.json` 对应帖子，不直接消费全部帖子包
 - 右侧 section 标题、状态与 summary 第一波继续沿用前端 mock
@@ -79,7 +81,9 @@
 - `data/sessions/<session_id>/workspace/selected_posts.json`
 - `data/sessions/<session_id>/workspace/pattern_summary.json`
 - `data/sessions/<session_id>/workspace/copy_draft.json`
+- `data/sessions/<session_id>/workspace/editor_images.json`
 - `data/sessions/<session_id>/workspace/image_results.json`
+- `data/sessions/<session_id>/workspace/generated_images/<image_id>.png`
 - `data/sessions/<session_id>/workspace/posts/<post_id>/post.json`
 - `data/sessions/<session_id>/workspace/posts/<post_id>/raw.json`
 - `data/sessions/<session_id>/workspace/posts/<post_id>/assets/...`
@@ -129,6 +133,17 @@
 ### Image Results
 
 - 图片结果对象或图片产物索引
+
+### Editor Images
+
+- 当前编辑区图片列表
+- 每条至少包含：
+  - `id`
+  - `order`
+  - `source_type`
+  - `image_path`
+  - `alt`
+  - 可选来源引用字段
 
 ### Post Detail
 
@@ -184,6 +199,9 @@
   - `candidate_posts`
   - `pattern_summary`
   - `copy_draft`
+- 后续扩展暴露：
+  - `editor_images`
+  - `image_results`
 - `candidate_posts` 在只读 DTO 中由：
   - `posts/<post_id>/post.json`
   - `selected_posts.json`
@@ -214,7 +232,8 @@
 - 继续保留 mock：
   - `materials`
   - `collector`
-  - `imageResults`
+  - `materials`
+  - `collector`
 
 ## 读取接口与 DTO
 
@@ -229,6 +248,8 @@
 - `candidate_posts`
 - `pattern_summary`
 - `copy_draft`
+- `editor_images`
+- `image_results`
 - `updated_at`
 
 DTO 策略：

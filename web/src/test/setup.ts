@@ -4,6 +4,7 @@ import {
   mockCandidatePostsByTopicId,
   mockChatMessagesByTopicId,
   mockCopyDraftByTopicId,
+  mockImageResultsByTopicId,
   mockPatternSummaryByTopicId,
   mockTopics
 } from "../data/mockTopics";
@@ -15,6 +16,10 @@ Object.defineProperty(window, "scrollTo", {
 
 let topicStore = mockTopics.map((topic) => ({ ...topic }));
 let candidatePostStore = JSON.parse(JSON.stringify(mockCandidatePostsByTopicId)) as Record<string, typeof mockCandidatePostsByTopicId[string]>;
+let messageStore = JSON.parse(JSON.stringify(mockChatMessagesByTopicId)) as Record<
+  string,
+  typeof mockChatMessagesByTopicId[string]
+>;
 let patternSummaryStore = JSON.parse(JSON.stringify(mockPatternSummaryByTopicId)) as Record<
   string,
   typeof mockPatternSummaryByTopicId[string] | null
@@ -22,6 +27,11 @@ let patternSummaryStore = JSON.parse(JSON.stringify(mockPatternSummaryByTopicId)
 let copyDraftStore = JSON.parse(JSON.stringify(mockCopyDraftByTopicId)) as Record<
   string,
   typeof mockCopyDraftByTopicId[string] | null
+>;
+let editorImagesStore = {} as Record<string, Array<Record<string, unknown>>>;
+let imageResultsStore = JSON.parse(JSON.stringify(mockImageResultsByTopicId)) as Record<
+  string,
+  typeof mockImageResultsByTopicId[string]
 >;
 let createdTopicCounter = 0;
 const mockSkills = [
@@ -52,6 +62,10 @@ beforeEach(() => {
     string,
     typeof mockCandidatePostsByTopicId[string]
   >;
+  messageStore = JSON.parse(JSON.stringify(mockChatMessagesByTopicId)) as Record<
+    string,
+    typeof mockChatMessagesByTopicId[string]
+  >;
   patternSummaryStore = JSON.parse(JSON.stringify(mockPatternSummaryByTopicId)) as Record<
     string,
     typeof mockPatternSummaryByTopicId[string] | null
@@ -59,6 +73,11 @@ beforeEach(() => {
   copyDraftStore = JSON.parse(JSON.stringify(mockCopyDraftByTopicId)) as Record<
     string,
     typeof mockCopyDraftByTopicId[string] | null
+  >;
+  editorImagesStore = {};
+  imageResultsStore = JSON.parse(JSON.stringify(mockImageResultsByTopicId)) as Record<
+    string,
+    typeof mockImageResultsByTopicId[string]
   >;
   createdTopicCounter = 0;
 });
@@ -150,12 +169,16 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         topic_id: topicId,
         topic_title: requestUrl.searchParams.get("topic_title") ?? topic.title,
         session_id: `session-${topicId}`,
-        messages: (mockChatMessagesByTopicId[topicId] ?? []).map((message) => ({
+        messages: (messageStore[topicId] ?? []).map((message) => ({
           id: message.id,
           role: message.role,
           text: message.text,
           time: message.time,
           agent_name: message.agentName ?? null,
+          image_attachments: (message.imageAttachments ?? []).map((image) => ({
+            image_url: image.imageUrl,
+            alt: image.alt,
+          })),
           tool_summary: (message.toolSummary ?? []).map((item) => ({
             name: item.name,
             arguments_summary: item.argumentsSummary,
@@ -180,6 +203,8 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         candidate_posts: candidatePostStore[topicId] ?? [],
         pattern_summary: patternSummaryStore[topicId] ?? null,
         copy_draft: copyDraftStore[topicId] ?? null,
+        editor_images: editorImagesStore[topicId] ?? [],
+        image_results: imageResultsStore[topicId] ?? [],
         updated_at: "2026-03-29T10:00:00+08:00"
       }),
       {
@@ -220,6 +245,69 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
     );
   }
 
+  if (path.endsWith("/editor-images") && (init?.method === undefined || init.method === "GET")) {
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        items: editorImagesStore[topicId] ?? [],
+        updated_at: "2026-03-29T10:00:30+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.endsWith("/editor-images") && init?.method === "PUT") {
+    const rawBody = init.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as { items?: Array<Record<string, unknown>> })
+        : {};
+    editorImagesStore[topicId] = (parsedBody.items ?? []).map((item, index) => ({
+      id: item.id ?? `editor-${index + 1}`,
+      order: index + 1,
+      sourceType: item.source_type ?? item.sourceType ?? "material",
+      sourcePostId: item.source_post_id ?? item.sourcePostId ?? null,
+      sourceImageId: item.source_image_id ?? item.sourceImageId ?? null,
+      sourceGeneratedImageId:
+        item.source_generated_image_id ?? item.sourceGeneratedImageId ?? null,
+      imageUrl: `/api/topics/${topicId}/assets/${String(item.image_path ?? item.imagePath ?? "")}`,
+      imagePath: String(item.image_path ?? item.imagePath ?? ""),
+      alt: item.alt ?? `编辑图 ${index + 1}`,
+    }));
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        items: editorImagesStore[topicId],
+        updated_at: "2026-03-29T10:00:40+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.includes("/image-results/") && init?.method === "DELETE") {
+    const pathParts = path.split("/");
+    const imageId = pathParts[pathParts.length - 1] ?? "";
+    imageResultsStore[topicId] = (imageResultsStore[topicId] ?? []).filter((item) => item.id !== imageId);
+    return new Response(
+      JSON.stringify({
+        deleted_image_id: imageId,
+        updated_at: "2026-03-29T10:00:45+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
   if (path.endsWith("/runs")) {
     const rawBody = init?.body;
     const parsedBody =
@@ -245,12 +333,34 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
           "如果你每天早上都在衣柜前发呆，这版思路可以直接照搬。\n\n我把通勤穿搭里最常用的 4 件基础款重新组合了一遍，发现只要把版型和颜色理顺，上班真的会轻松很多。\n\n下面这版公式你可以直接拿去发。"
       };
     }
+    const generatedImageAttachment =
+      userInput.includes("生成图片") || userInput.includes("1号图") || userInput.includes("2号图")
+        ? [
+            {
+              image_url: "https://example.com/generated-result.png",
+              alt: "生成结果图",
+            },
+          ]
+        : [];
+    if (generatedImageAttachment.length > 0) {
+      imageResultsStore[topicId] = [
+        ...(imageResultsStore[topicId] ?? []),
+        {
+          id: `gen-${Date.now()}`,
+          imageUrl: "https://example.com/generated-result.png",
+          imagePath: "generated_images/generated-result.png",
+          alt: "生成结果图",
+          prompt: userInput,
+          sourceEditorImageIds: [],
+          createdAt: "2026-03-29T10:00:50+08:00",
+        },
+      ];
+    }
     const userMessage = {
       id: `user-${userInput}`,
       role: "user",
       text: userInput,
       time: "刚刚",
-      agent_name: null
     };
     const agentMessage = {
       id: `agent-${userInput}`,
@@ -258,6 +368,7 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
       text: `后端 API mock 已收到：${userInput}`,
       time: "刚刚",
       agent_name: "协作 Agent",
+      image_attachments: generatedImageAttachment,
       tool_summary: [
         {
           name: "xhs-explore",
@@ -266,26 +377,55 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         }
       ]
     };
+    messageStore[topicId] = [
+      ...(messageStore[topicId] ?? []),
+      {
+        id: userMessage.id,
+        role: "user",
+        text: userMessage.text,
+        time: userMessage.time,
+      },
+      {
+        id: agentMessage.id,
+        role: "agent",
+        text: agentMessage.text,
+        time: agentMessage.time,
+        agentName: "协作 Agent",
+        toolSummary: [
+          {
+            name: "xhs-explore",
+            argumentsSummary: `{\"keyword\":${JSON.stringify(userInput)}}`,
+            resultSummary: "已返回一条运行摘要。",
+          },
+        ],
+        imageAttachments: generatedImageAttachment.map((image) => ({
+          imageUrl: image.image_url,
+          alt: image.alt,
+        })),
+      },
+    ];
     return new Response(
       JSON.stringify({
         topic_id: topicId,
         topic_title: parsedBody.topic_title ?? topic.title,
         session_id: `session-${topicId}`,
         messages: [
-          ...((mockChatMessagesByTopicId[topicId] ?? []).map((message) => ({
+          ...((messageStore[topicId] ?? []).map((message) => ({
             id: message.id,
             role: message.role,
             text: message.text,
             time: message.time,
             agent_name: message.agentName ?? null,
+            image_attachments: (message.imageAttachments ?? []).map((image) => ({
+              image_url: image.imageUrl,
+              alt: image.alt,
+            })),
             tool_summary: (message.toolSummary ?? []).map((item) => ({
               name: item.name,
               arguments_summary: item.argumentsSummary,
               result_summary: item.resultSummary,
             })),
-          })) as Array<Record<string, unknown>>),
-          userMessage,
-          agentMessage
+          })) as Array<Record<string, unknown>>)
         ],
         updated_at: "2026-03-29T10:01:00+08:00",
         last_run: {
@@ -326,6 +466,43 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
           "如果你每天早上都在衣柜前发呆，这版思路可以直接照搬。\n\n我把通勤穿搭里最常用的 4 件基础款重新组合了一遍，发现只要把版型和颜色理顺，上班真的会轻松很多。\n\n下面这版公式你可以直接拿去发。"
       };
     }
+    if (userInput.includes("生成图片") || userInput.includes("1号图") || userInput.includes("2号图")) {
+      imageResultsStore[topicId] = [
+        ...(imageResultsStore[topicId] ?? []),
+        {
+          id: `gen-stream-${Date.now()}`,
+          imageUrl: "https://example.com/generated-result.png",
+          imagePath: "generated_images/generated-result.png",
+          alt: "生成结果图",
+          prompt: userInput,
+          sourceEditorImageIds: [],
+          createdAt: "2026-03-29T10:00:50+08:00",
+        },
+      ];
+    }
+    messageStore[topicId] = [
+      ...(messageStore[topicId] ?? []),
+      {
+        id: `user-${userInput}`,
+        role: "user",
+        text: userInput,
+        time: "刚刚",
+      },
+      {
+        id: `agent-${userInput}`,
+        role: "agent",
+        text: `后端 API mock 已收到：${userInput}`,
+        time: "刚刚",
+        agentName: "协作 Agent",
+        toolSummary: [
+          {
+            name: "xhs-explore",
+            argumentsSummary: `{\"keyword\":${JSON.stringify(userInput)}}`,
+            resultSummary: "已返回一条运行摘要。",
+          },
+        ],
+      },
+    ];
     const streamPayload = [
       `event: run_started\ndata: ${JSON.stringify({
         type: "run_started",

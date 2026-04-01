@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from backend.topic_truth_models import (
     CandidatePostsDocument,
     CopyDraftRecord,
+    EditorImagesDocument,
     ImageResultsRecord,
     PatternSummaryRecord,
     PostDetail,
@@ -35,6 +36,7 @@ class SessionWorkspaceStore:
     def initialize_workspace(self, session_id: str) -> Path:
         root = self.get_workspace_root(session_id)
         self.get_posts_root(session_id).mkdir(parents=True, exist_ok=True)
+        (root / "generated_images").mkdir(parents=True, exist_ok=True)
         return root
 
     def clear_workspace(self, session_id: str) -> None:
@@ -47,6 +49,9 @@ class SessionWorkspaceStore:
 
     def get_posts_root(self, session_id: str) -> Path:
         return self.get_workspace_root(session_id) / "posts"
+
+    def get_generated_images_root(self, session_id: str) -> Path:
+        return self.get_workspace_root(session_id) / "generated_images"
 
     def get_post_root(self, session_id: str, post_id: str) -> Path:
         return self.get_posts_root(session_id) / post_id
@@ -126,6 +131,20 @@ class SessionWorkspaceStore:
     def write_copy_draft(self, session_id: str, record: CopyDraftRecord) -> CopyDraftRecord:
         self._write_model(self.get_workspace_root(session_id) / "copy_draft.json", record)
         return record
+
+    def read_editor_images(self, session_id: str) -> EditorImagesDocument | None:
+        return self._read_model(
+            self.get_workspace_root(session_id) / "editor_images.json",
+            EditorImagesDocument,
+        )
+
+    def write_editor_images(
+        self,
+        session_id: str,
+        document: EditorImagesDocument,
+    ) -> EditorImagesDocument:
+        self._write_model(self.get_workspace_root(session_id) / "editor_images.json", document)
+        return document
 
     def read_image_results(self, session_id: str) -> ImageResultsRecord | None:
         return self._read_model(

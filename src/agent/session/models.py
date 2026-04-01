@@ -27,6 +27,13 @@ class SessionSnapshot(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class SessionImageAttachment(BaseModel):
+    """Lightweight image attachment persisted with one assistant final answer."""
+
+    image_path: str
+    alt: str
+
+
 class SessionMessage(BaseModel):
     """Serializable session history entry."""
 
@@ -36,6 +43,7 @@ class SessionMessage(BaseModel):
     tool_calls: list[ToolCallPayload] = Field(default_factory=list)
     tool_call_id: str | None = None
     name: str | None = None
+    image_attachments: list[SessionImageAttachment] = Field(default_factory=list)
 
     def to_prompt_message(self) -> PromptMessage:
         """Convert the session entry to a prompt message."""

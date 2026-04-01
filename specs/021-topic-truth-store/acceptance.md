@@ -30,10 +30,13 @@
 26. 确认 `selected` 与 `manualOrder` 可由 `selected_posts.json` 正确映射
 27. 确认 `patternSummary` 可返回真实总结字段
 28. 确认 `copyDraft` 可返回真实文案字段
-29. 确认右侧其它 section 仍然继续使用 mock
-30. 调用 `POST /reset`
-31. 确认主栏消息与右侧 workspace 数据一起清空
-32. 确认 session workspace 数据可被后续右侧 workspace 消费
+29. 确认 `editorImages` 可返回真实编辑区图片
+30. 确认 `imageResults` 可返回真实图片结果单列表
+31. 确认 assistant final message 可附带代表图图片附件
+32. 确认右侧其它 section 中 `materials`、`collector` 仍然继续使用 mock
+33. 调用 `POST /reset`
+34. 确认主栏消息与右侧 workspace 数据一起清空
+35. 确认 session workspace 数据可被后续右侧 workspace 消费
 
 ## 自动化验收
 
@@ -55,8 +58,11 @@
 - 单图帖子回退到单项图片数组测试通过
 - `patternSummary` DTO 转换测试通过
 - `copyDraft` DTO 转换测试通过
+- `editorImages` DTO 转换测试通过
+- `imageResults` 单列表 DTO 转换测试通过
+- assistant final answer 图片附件 DTO 转换测试通过
 - `POST /reset` 后右侧 workspace 清空测试通过
-- 前端右侧仅替换 `candidatePosts`、`patternSummary` 与 `copyDraft` 的集成测试通过
+- 前端右侧 `candidatePosts`、`patternSummary`、`copyDraft`、`editorImages` 与 `imageResults` 的集成测试通过
 
 ## 已知限制
 
@@ -65,5 +71,5 @@
 - 当前不直接包含前端 UI 集成实现
 - 当前不定义帖子读取/下载执行流程
 - 第一波右侧真实化已包含 `selected_posts.json` 的最小写回交互
-- 第一波右侧真实化不包含 `imageResults`、`materials`、`collector`
+- 第一波右侧真实化已包含 `imageResults`；`materials`、`collector` 仍使用 mock
 - 当前 `candidatePosts` 已从 `posts/ + selected_posts.json` 组装，`candidate_posts.json` 不再作为正式真相层

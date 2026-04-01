@@ -83,29 +83,41 @@ class CopyDraftRecord(BaseModel):
     updated_at: datetime
 
 
-class ImageCandidateRecord(BaseModel):
-    """Single generated image candidate."""
+class EditorImageRecord(BaseModel):
+    """Single editor-area image persisted in workspace."""
 
     id: str
-    kind: Literal["cover", "inner"]
+    order: int
+    source_type: Literal["material", "generated"]
+    source_post_id: str | None = None
+    source_image_id: str | None = None
+    source_generated_image_id: str | None = None
     alt: str
     image_path: str
 
 
-class ImageTaskGroupRecord(BaseModel):
-    """Image task group for the workspace."""
+class EditorImagesDocument(BaseModel):
+    """Persisted editor image list."""
+
+    items: list[EditorImageRecord] = Field(default_factory=list)
+    updated_at: datetime
+
+
+class GeneratedImageResultRecord(BaseModel):
+    """Single generated image result."""
 
     id: str
-    mode: Literal["text-to-image", "image-to-image"]
-    title: str
-    summary: str
-    images: list[ImageCandidateRecord] = Field(default_factory=list)
+    image_path: str
+    alt: str
+    prompt: str
+    source_editor_image_ids: list[str] = Field(default_factory=list)
+    created_at: datetime
 
 
 class ImageResultsRecord(BaseModel):
     """Image result index for the workspace."""
 
-    groups: list[ImageTaskGroupRecord] = Field(default_factory=list)
+    items: list[GeneratedImageResultRecord] = Field(default_factory=list)
     updated_at: datetime
 
 

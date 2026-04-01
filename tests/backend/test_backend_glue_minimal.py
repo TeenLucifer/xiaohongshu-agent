@@ -395,6 +395,41 @@ def test_messages_endpoint_returns_only_final_answer_with_tool_summary(tmp_path:
     ]
 
 
+def test_update_editor_images_accepts_camel_case_payload(tmp_path: Path) -> None:
+    async def run() -> dict[str, Any]:
+        async with make_client(tmp_path) as client:
+            created = await client.post(
+                "/api/topics",
+                json={"title": "图片话题", "description": ""},
+            )
+            topic = cast(dict[str, Any], created.json())
+            response = await client.put(
+                f"/api/topics/{topic['topic_id']}/editor-images",
+                json={
+                    "topicTitle": "图片话题",
+                    "items": [
+                        {
+                            "id": "editor-1",
+                            "order": 1,
+                            "sourceType": "material",
+                            "sourcePostId": "post-1",
+                            "sourceImageId": "image-1",
+                            "imagePath": "posts/post-1/assets/image-01.png",
+                            "alt": "测试图片",
+                        }
+                    ],
+                },
+            )
+            assert response.status_code == 200
+            return cast(dict[str, Any], response.json())
+
+    payload = asyncio.run(run())
+    assert payload["items"][0]["sourceType"] == "material"
+    assert payload["items"][0]["sourcePostId"] == "post-1"
+    assert payload["items"][0]["sourceImageId"] == "image-1"
+    assert payload["items"][0]["imagePath"] == "posts/post-1/assets/image-01.png"
+
+
 def test_streaming_run_endpoint_emits_ordered_sse_events(tmp_path: Path) -> None:
     async def run() -> str:
         async with make_streaming_client(tmp_path) as client:
