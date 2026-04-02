@@ -15,7 +15,7 @@
 - 提供一个根级 `pattern-summary` skill
 - 让 agent 能基于当前 `selected_posts.json` 对应帖子生成结构化总结
 - 将结果写回 `workspace/pattern_summary.json`
-- 支持主栏对话触发与右侧“总结”按钮触发
+- 支持主栏对话触发与搜索结果区内嵌“总结”按钮触发
 
 ## 非目标
 
@@ -51,7 +51,8 @@
   - 不写 `pattern_summary.json`
   - 明确提示用户先加入已选帖子
 - 写回结果必须遵循 `PatternSummaryRecord`，包含 `image_patterns` 和 `image_quality_notes` 字段
-- 右侧”总结”按钮本质上只是代用户发送固定指令，不新增第二套后端动作
+- 搜索结果区内的“总结”按钮本质上只是代用户发送固定指令，不新增第二套后端动作
+- 总结前端展示口径固定为：搜索结果区下方的内嵌折叠块，不再独立占据一个 section
 
 ## 输出字段
 
@@ -70,6 +71,6 @@
 
 - agent 能识别并加载 `pattern-summary` skill
 - 基于已选帖子能写出合法的 `pattern_summary.json`
-- 右侧“总结”区可通过按钮触发一次 run
-- run 完成后右侧工作区能显示真实总结结果
+- 搜索结果区内可通过按钮触发一次 run
+- run 完成后搜索结果区下方能显示真实总结结果
 - 无已选帖子时不会写文件，并给出明确失败提示

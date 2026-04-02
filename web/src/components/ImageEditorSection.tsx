@@ -62,6 +62,12 @@ export function ImageEditorSection({
         const nextId = `editor-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         let newEditorImage: EditorImage;
         if ("sourceType" in image && image.sourceType === "generated") {
+          const alreadyExists = editorImages.some(
+            (item) => item.sourceType === "generated" && item.sourceGeneratedImageId === image.id
+          );
+          if (alreadyExists) {
+            return;
+          }
           newEditorImage = {
             id: nextId,
             order: editorImages.length + 1,
@@ -72,6 +78,12 @@ export function ImageEditorSection({
             alt: image.alt,
           };
         } else if ("postId" in image) {
+          const alreadyExists = editorImages.some(
+            (item) => item.sourceType === "material" && item.sourceImageId === image.id
+          );
+          if (alreadyExists) {
+            return;
+          }
           newEditorImage = {
             id: nextId,
             order: editorImages.length + 1,

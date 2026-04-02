@@ -1,6 +1,5 @@
-import { StatusBadge } from "./StatusBadge";
 import { MarkdownContent } from "./MarkdownContent";
-import type { PatternSummaryContent, WorkspaceSection } from "../types/workspace";
+import type { PatternSummaryContent } from "../types/workspace";
 
 function buildPatternSummaryMarkdown(content: PatternSummaryContent): string {
   const sections: string[] = [];
@@ -44,22 +43,12 @@ function buildPatternSummaryMarkdown(content: PatternSummaryContent): string {
 
 export function PatternSummarySection({
   content,
-  section
 }: {
   content: PatternSummaryContent;
-  section: WorkspaceSection;
 }): JSX.Element {
   return (
-    <section className="workspace-section">
-      <div className="workspace-section-header">
-        <h2>{section.title}</h2>
-        <StatusBadge status={section.status} />
-      </div>
-      <p>{section.summary}</p>
-
-      <div className="content-panel">
-        <MarkdownContent content={buildPatternSummaryMarkdown(content)} />
-      </div>
-    </section>
+    <div className="content-panel">
+      <MarkdownContent content={buildPatternSummaryMarkdown(content)} />
+    </div>
   );
 }

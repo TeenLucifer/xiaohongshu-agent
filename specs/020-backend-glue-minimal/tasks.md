@@ -27,6 +27,8 @@
 - [x] 实现最小 CORS 与前端 API base URL 约定。
 - [x] 补齐映射层、API 层与 runtime 集成测试。
 - [x] 接通前端主栏对真实后端 API 的最小依赖准备与页面替换。
+- [x] 提供文案选区 AI 润色专用接口。
+  已新增 `POST /api/topics/{topic_id}/copy-draft/polish-selection`，返回结构化替换文本并只向会话追加一条结果消息。
 
 ## 备注
 

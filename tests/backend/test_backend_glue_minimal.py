@@ -69,6 +69,30 @@ class StreamingToolModelClient:
         return LoopModelResponse(content="流式最终回复：openclaw")
 
 
+class SelectionPolishModelClient:
+    def complete(
+        self,
+        *,
+        messages: list[PromptMessage],
+        tool_definitions: list[ToolDefinition],
+        tool_choice: object | None = None,
+    ) -> LoopModelResponse:
+        _ = tool_definitions
+        _ = tool_choice
+        latest_user = messages[-1].content
+        if "[Selected Text]" in latest_user:
+            return LoopModelResponse(
+                content=json.dumps(
+                    {
+                        "replacement_text": "润色后的选中文本",
+                        "message": "已按你的要求润色选中内容。",
+                    },
+                    ensure_ascii=False,
+                )
+            )
+        return LoopModelResponse(content="默认回复")
+
+
 class EchoToolArguments(ToolArguments):
     keyword: str
 
@@ -108,6 +132,23 @@ def make_streaming_client(tmp_path: Path) -> AsyncClient:
         model_client=StreamingToolModelClient(),
     )
     runtime.tools_registry.register(EchoTool())
+    app = create_app(
+        runtime=runtime,
+        project_root=tmp_path,
+        data_root=tmp_path / "data",
+        allowed_origins=["http://127.0.0.1:5173"],
+        trace_mode="off",
+    )
+    transport = ASGITransport(app=app)
+    return AsyncClient(transport=transport, base_url="http://testserver")
+
+
+def make_selection_polish_client(tmp_path: Path) -> AsyncClient:
+    runtime = AgentRuntime(
+        project_root=tmp_path,
+        data_root=tmp_path / "data",
+        model_client=SelectionPolishModelClient(),
+    )
     app = create_app(
         runtime=runtime,
         project_root=tmp_path,
@@ -452,6 +493,104 @@ def test_update_copy_draft_persists_workspace_file(tmp_path: Path) -> None:
     payload = asyncio.run(run())
     assert payload["copy_draft"]["title"] == "新的标题"
     assert payload["copy_draft"]["body"] == "## 第一行\n\n- 第二行"
+
+
+def test_polish_copy_draft_selection_returns_replacement_and_only_appends_agent_message(
+    tmp_path: Path,
+) -> None:
+    async def run() -> tuple[dict[str, Any], dict[str, Any]]:
+        async with make_selection_polish_client(tmp_path) as client:
+            created = await client.post(
+                "/api/topics",
+                json={"title": "润色话题", "description": ""},
+            )
+            topic = cast(dict[str, Any], created.json())
+            response = await client.post(
+                f"/api/topics/{topic['topic_id']}/copy-draft/polish-selection",
+                json={
+                    "topic_title": "润色话题",
+                    "selected_text": "原始选中文本",
+                    "instruction": "更口语一点",
+                    "document_markdown": "# 标题\n\n原始选中文本",
+                },
+            )
+            assert response.status_code == 200
+            messages_response = await client.get(
+                f"/api/topics/{topic['topic_id']}/messages",
+                params={"topic_title": "润色话题"},
+            )
+            assert messages_response.status_code == 200
+            return (
+                cast(dict[str, Any], response.json()),
+                cast(dict[str, Any], messages_response.json()),
+            )
+
+    payload, messages_payload = asyncio.run(run())
+    assert payload["replacement_text"] == "润色后的选中文本"
+    assert payload["message"] == "已按你的要求润色选中内容。"
+    assert [message["role"] for message in messages_payload["messages"]] == ["user", "agent"]
+    assert messages_payload["messages"][0]["text"] == "更口语一点"
+    assert messages_payload["messages"][1]["text"] == "已按你的要求润色选中内容。"
+
+
+def test_polish_copy_draft_selection_rejects_empty_fields(tmp_path: Path) -> None:
+    async def run() -> tuple[int, dict[str, Any], int, dict[str, Any], int, dict[str, Any]]:
+        async with make_selection_polish_client(tmp_path) as client:
+            created = await client.post(
+                "/api/topics",
+                json={"title": "润色话题", "description": ""},
+            )
+            topic = cast(dict[str, Any], created.json())
+            empty_selection = await client.post(
+                f"/api/topics/{topic['topic_id']}/copy-draft/polish-selection",
+                json={
+                    "topic_title": "润色话题",
+                    "selected_text": "",
+                    "instruction": "更口语一点",
+                    "document_markdown": "# 标题\n\n正文",
+                },
+            )
+            empty_instruction = await client.post(
+                f"/api/topics/{topic['topic_id']}/copy-draft/polish-selection",
+                json={
+                    "topic_title": "润色话题",
+                    "selected_text": "正文",
+                    "instruction": "",
+                    "document_markdown": "# 标题\n\n正文",
+                },
+            )
+            empty_document = await client.post(
+                f"/api/topics/{topic['topic_id']}/copy-draft/polish-selection",
+                json={
+                    "topic_title": "润色话题",
+                    "selected_text": "正文",
+                    "instruction": "更口语一点",
+                    "document_markdown": "",
+                },
+            )
+            return (
+                empty_selection.status_code,
+                cast(dict[str, Any], empty_selection.json()),
+                empty_instruction.status_code,
+                cast(dict[str, Any], empty_instruction.json()),
+                empty_document.status_code,
+                cast(dict[str, Any], empty_document.json()),
+            )
+
+    (
+        empty_selection_status,
+        empty_selection_payload,
+        empty_instruction_status,
+        empty_instruction_payload,
+        empty_document_status,
+        empty_document_payload,
+    ) = asyncio.run(run())
+    assert empty_selection_status == 422
+    assert empty_selection_payload["error_code"] == "invalid_request"
+    assert empty_instruction_status == 422
+    assert empty_instruction_payload["error_code"] == "invalid_request"
+    assert empty_document_status == 422
+    assert empty_document_payload["error_code"] == "invalid_request"
 
 
 def test_streaming_run_endpoint_emits_ordered_sse_events(tmp_path: Path) -> None:

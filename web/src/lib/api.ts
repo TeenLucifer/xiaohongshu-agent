@@ -100,6 +100,14 @@ export interface CopyDraftApiResponse {
   updated_at: string;
 }
 
+export interface CopyDraftSelectionPolishApiResponse {
+  topic_id: string;
+  topic_title: string;
+  replacement_text: string;
+  message: string;
+  updated_at: string;
+}
+
 export interface DeleteImageResultApiResponse {
   deleted_image_id: string;
   updated_at: string;
@@ -457,6 +465,29 @@ export async function updateCopyDraft(
       body: draft.body,
     }),
   });
+}
+
+export async function polishCopyDraftSelection(
+  topicId: string,
+  topicTitle: string,
+  payload: {
+    selectedText: string;
+    instruction: string;
+    documentMarkdown: string;
+  }
+): Promise<CopyDraftSelectionPolishApiResponse> {
+  return requestJson<CopyDraftSelectionPolishApiResponse>(
+    `/api/topics/${topicId}/copy-draft/polish-selection`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        topic_title: topicTitle,
+        selected_text: payload.selectedText,
+        instruction: payload.instruction,
+        document_markdown: payload.documentMarkdown,
+      }),
+    }
+  );
 }
 
 export async function deleteImageResult(

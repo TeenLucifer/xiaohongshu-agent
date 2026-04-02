@@ -16,6 +16,10 @@
   主栏 agent 消息需支持 GFM 基础 Markdown，只读显示，不支持原始 HTML。
 - [x] `004-G`：完成 final answer 视图收口与工具摘要附着
   主栏 agent 消息已按 user turn 只展示 final answer，中间 assistant 迭代不再展示；tool 调用仅以附着在 final answer 下方的折叠摘要存在。
+- [x] `004-H`：完成对话区迁入工作区 tab
+  对话消息流与输入框已迁入 `对话` tab，不再作为页面常驻中心主栏。
+- [x] `004-I`：接入其它 tab 的局部输入记录
+  `选题 / 创作` 中的局部输入消息现在与 `对话` tab 主输入框共享同一消息流真相。
 
 ## 测试与验收
 
@@ -26,6 +30,8 @@
 - [x] agent 消息 Markdown 渲染测试
 - [x] user 文本消息不受 Markdown 渲染影响测试
 - [x] final answer 过滤与 tool 摘要折叠展示测试
+- [x] 对话 tab 中输入框显隐与自动滚底测试通过
+- [x] 其它 tab 局部输入同步到对话记录测试通过
 
 ## 实现收口
 

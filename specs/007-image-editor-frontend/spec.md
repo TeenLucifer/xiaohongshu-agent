@@ -52,7 +52,9 @@
 - 使用 HTML5 Drag & Drop API
 - 拖拽时显示半透明预览
 - 拖入编辑区时高亮显示目标区域
-- 同一张图片可多次拖入
+- 同一张图片按来源 ID 去重
+  - 素材图按 `sourceImageId` 去重
+  - 生成图按 `sourceGeneratedImageId` 去重
 
 ## 数据结构
 

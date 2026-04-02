@@ -14,6 +14,13 @@ Object.defineProperty(window, "scrollTo", {
   writable: true
 });
 
+if (typeof Element !== "undefined") {
+  Object.defineProperty(Element.prototype, "scrollIntoView", {
+    configurable: true,
+    value: vi.fn(),
+  });
+}
+
 if (typeof Range !== "undefined") {
   Object.defineProperty(Range.prototype, "getBoundingClientRect", {
     configurable: true,
@@ -336,6 +343,44 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         topic_title: topic.title,
         copy_draft: copyDraftStore[topicId],
         updated_at: "2026-03-29T10:00:42+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.endsWith("/copy-draft/polish-selection") && init?.method === "POST") {
+    const rawBody = init.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as {
+            selected_text?: string;
+            instruction?: string;
+            document_markdown?: string;
+          })
+        : {};
+    const selectedText = parsedBody.selected_text ?? "";
+    const instruction = parsedBody.instruction ?? "";
+    const replacementText = `[已润色] ${selectedText || "选中文本"}`;
+    messageStore[topicId] = [
+      ...(messageStore[topicId] ?? []),
+      {
+        id: `agent-polish-${Date.now()}`,
+        role: "agent",
+        text: `已按要求润色选中文本：${instruction || "未提供要求"}`,
+        time: "刚刚",
+        agentName: "协作 Agent",
+      },
+    ];
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        replacement_text: replacementText,
+        message: `已按要求润色选中文本：${instruction || "未提供要求"}`,
+        updated_at: "2026-03-29T10:00:43+08:00",
       }),
       {
         status: 200,

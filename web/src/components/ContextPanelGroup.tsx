@@ -2,7 +2,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown } from "lucide-react";
 import type { PropsWithChildren, ReactNode } from "react";
 import type { WorkspaceSection } from "../types/workspace";
-import { Badge } from "./ui/Badge";
 import { Button } from "./ui/Button";
 
 export function ContextPanelGroup({
@@ -23,8 +22,6 @@ export function ContextPanelGroup({
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-[15px] font-semibold text-slate-900">{section.title}</h2>
-            {section.status === "loading" ? <Badge variant="primary">进行中</Badge> : null}
-            {section.status === "success" ? <Badge variant="success">已就绪</Badge> : null}
           </div>
           <p className="mt-1 text-xs leading-5 text-slate-500">{section.summary}</p>
         </div>

@@ -17,8 +17,10 @@ from agent.runtime import AgentRuntime
 from agent.trace import TraceMode
 from backend.schemas import (
     CopyDraftResponse,
+    CopyDraftSelectionPolishResponse,
     CreateTopicRequestBody,
     ErrorResponse,
+    PolishCopyDraftSelectionRequestBody,
     ResetRequestBody,
     RunRequestBody,
     UpdateCopyDraftRequestBody,
@@ -250,6 +252,20 @@ def create_app(
             topic_title=payload.topic_title,
             title=payload.title,
             body=payload.body,
+        )
+
+    @app.post("/api/topics/{topic_id}/copy-draft/polish-selection")
+    async def polish_copy_draft_selection(
+        request: Request,
+        topic_id: str,
+        payload: PolishCopyDraftSelectionRequestBody,
+    ) -> CopyDraftSelectionPolishResponse:
+        return request.app.state.backend_service.polish_copy_draft_selection(
+            topic_id=topic_id,
+            topic_title=payload.topic_title,
+            selected_text=payload.selected_text,
+            instruction=payload.instruction,
+            document_markdown=payload.document_markdown,
         )
 
     @app.delete("/api/topics/{topic_id}/image-results/{image_id}")

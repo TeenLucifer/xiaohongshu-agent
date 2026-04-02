@@ -48,3 +48,10 @@
 - [x] 更新 `web/src/lib/api.ts`
   - [x] 添加 getEditorImages 函数
   - [x] 添加 updateEditorImages 函数
+
+## Phase 6: 编辑区去重
+
+- [x] 在 `ImageEditorSection` 的拖拽落点逻辑中增加来源级去重
+  - [x] 素材图按 `sourceImageId` 去重
+  - [x] 生成图按 `sourceGeneratedImageId` 去重
+- [x] 补充重复拖入的前端回归测试

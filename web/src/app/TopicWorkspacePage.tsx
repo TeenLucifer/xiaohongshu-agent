@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, SendHorizontal, Trash2 } from "lucide-react";
+import { ChevronDown, SendHorizontal, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AgentTimeline } from "../components/AgentTimeline";
@@ -10,7 +10,6 @@ import { ImageEditorSection } from "../components/ImageEditorSection";
 import { ImageResultsPanel } from "../components/ImageResultsPanel";
 import { PatternSummarySection } from "../components/PatternSummarySection";
 import { WorkspaceSidebar } from "../components/WorkspaceSidebar";
-import { Badge } from "../components/ui/Badge";
 import { Button } from "../components/ui/Button";
 import { Surface } from "../components/ui/Surface";
 import {
@@ -20,6 +19,7 @@ import {
   getWorkspaceContext,
   getMessages,
   listTopics,
+  polishCopyDraftSelection,
   runTopic,
   streamTopicRun,
   toChatMessages,
@@ -71,6 +71,54 @@ const GENERATE_PATTERN_SUMMARY_PROMPT =
 
 const GENERATE_COPY_DRAFT_PROMPT =
   "请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。";
+
+function InlineRunComposer({
+  ariaLabel,
+  buttonLabel = "发送",
+  disabled,
+  onChange,
+  onSubmit,
+  placeholder,
+  value,
+}: {
+  ariaLabel: string;
+  buttonLabel?: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  placeholder: string;
+  value: string;
+}): JSX.Element {
+  return (
+    <div className="flex items-center gap-2 rounded-[18px] border border-slate-200 bg-white px-3 py-2 shadow-sm">
+      <input
+        aria-label={ariaLabel}
+        className="h-10 flex-1 border-0 bg-transparent px-1 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            onSubmit();
+          }
+        }}
+        placeholder={placeholder}
+        type="text"
+        value={value}
+      />
+      <Button
+        aria-label={buttonLabel}
+        disabled={disabled}
+        onClick={onSubmit}
+        size="icon"
+        type="button"
+        variant="ghost"
+      >
+        <SendHorizontal className="h-4 w-4" strokeWidth={1.8} />
+      </Button>
+    </div>
+  );
+}
 
 function buildWorkspaceSections({
   candidatePosts,
@@ -150,10 +198,11 @@ export function TopicWorkspacePage(): JSX.Element {
   const [topics, setTopics] = useState<TopicCard[]>([]);
   const [isTopicsLoading, setIsTopicsLoading] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isContextOpen, setIsContextOpen] = useState(true);
   const [expandedGroups, setExpandedGroups] =
     useState<Record<WorkspaceSectionId, boolean>>(defaultExpandedGroups);
   const [composerValue, setComposerValue] = useState("");
+  const [candidateComposerValue, setCandidateComposerValue] = useState("");
+  const [imageComposerValue, setImageComposerValue] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [copyDraft, setCopyDraft] = useState<CopyDraftContent | undefined>();
   const [candidatePosts, setCandidatePosts] = useState<CandidatePost[]>([]);
@@ -164,7 +213,7 @@ export function TopicWorkspacePage(): JSX.Element {
   const [isSending, setIsSending] = useState(false);
   const [isDeletingTopic, setIsDeletingTopic] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
-  const [activeContextTab, setActiveContextTab] = useState<"选题" | "创作">("选题");
+  const [activeContextTab, setActiveContextTab] = useState<"选题" | "创作" | "对话">("选题");
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const copyDraftSaveTimerRef = useRef<number | null>(null);
   const [isCopyDraftSaving, setIsCopyDraftSaving] = useState(false);
@@ -209,6 +258,8 @@ export function TopicWorkspacePage(): JSX.Element {
   useEffect(() => {
     setExpandedGroups(defaultExpandedGroups);
     setComposerValue("");
+    setCandidateComposerValue("");
+    setImageComposerValue("");
     setMessages([]);
     setCopyDraft(undefined);
     // candidatePosts / patternSummary 已接真实后端，不再先注入 mock，避免切换 topic 时闪现旧假数据。
@@ -217,6 +268,7 @@ export function TopicWorkspacePage(): JSX.Element {
     setEditorImages([]);
     setImageResults([]);
     setIsSidebarCollapsed(false);
+    setActiveContextTab("选题");
     setIsCopyDraftSaving(false);
     if (copyDraftSaveTimerRef.current !== null) {
       window.clearTimeout(copyDraftSaveTimerRef.current);
@@ -330,14 +382,7 @@ export function TopicWorkspacePage(): JSX.Element {
     setExpandedGroups((current) => ({ ...current, [sectionId]: !current[sectionId] }));
   }
 
-  const shellColumns =
-    isSidebarCollapsed && isContextOpen
-      ? "80px minmax(520px, 560px) minmax(640px, 1fr)"
-      : isSidebarCollapsed && !isContextOpen
-        ? "80px minmax(520px, 1fr) 72px"
-        : !isSidebarCollapsed && isContextOpen
-          ? "248px minmax(520px, 560px) minmax(560px, 1fr)"
-          : "248px minmax(520px, 1fr) 72px";
+  const shellColumns = isSidebarCollapsed ? "80px minmax(0, 1fr)" : "248px minmax(0, 1fr)";
 
   function appendStreamingToolSummary(
     items: ToolSummaryItem[],
@@ -476,6 +521,16 @@ export function TopicWorkspacePage(): JSX.Element {
     await handleSendMessage(composerValue);
   }
 
+  async function handleCandidateSend(): Promise<void> {
+    await handleSendMessage(candidateComposerValue);
+    setCandidateComposerValue("");
+  }
+
+  async function handleImageSend(): Promise<void> {
+    await handleSendMessage(imageComposerValue);
+    setImageComposerValue("");
+  }
+
   async function handleGeneratePatternSummary(): Promise<void> {
     await handleSendMessage(GENERATE_PATTERN_SUMMARY_PROMPT);
   }
@@ -567,6 +622,70 @@ export function TopicWorkspacePage(): JSX.Element {
     }, 280);
   }
 
+  async function handlePolishCopyDraftSelection(payload: {
+    selectedText: string;
+    instruction: string;
+    documentMarkdown: string;
+  }): Promise<{ replacementText: string; message: string }> {
+    if (topic === undefined) {
+      throw new Error("当前没有可编辑的话题");
+    }
+    const instruction = payload.instruction.trim();
+    const timestampLabel = "刚刚";
+    const userMessageId = `user-polish:${Date.now()}`;
+    const agentMessageId = `agent-polish:${Date.now()}`;
+
+    setMessages((current) => [
+      ...current,
+      {
+        id: userMessageId,
+        role: "user",
+        text: instruction,
+        time: timestampLabel,
+      },
+    ]);
+
+    try {
+      const response = await polishCopyDraftSelection(topicId, topic.title, payload);
+      setMessages((current) => [
+        ...current,
+        {
+          id: agentMessageId,
+          role: "agent",
+          text: response.message,
+          time: timestampLabel,
+          agentName: "协作 Agent",
+        },
+      ]);
+      void getMessages(topicId, topic.title)
+        .then((latestMessages) => {
+          setMessages(toChatMessages(latestMessages.messages));
+        })
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : "加载会话失败";
+          setMessagesError(message);
+        });
+      return {
+        replacementText: response.replacement_text,
+        message: response.message,
+      };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "AI 润色失败";
+      setMessages((current) => [
+        ...current,
+        {
+          id: `${agentMessageId}:failed`,
+          role: "agent",
+          text: message,
+          time: timestampLabel,
+          agentName: "协作 Agent",
+          status: "failed",
+        },
+      ]);
+      throw error;
+    }
+  }
+
   async function handleRemoveGeneratedImage(imageId: string): Promise<void> {
     if (topic === undefined) {
       return;
@@ -630,8 +749,7 @@ export function TopicWorkspacePage(): JSX.Element {
       style={{ width: "100%" }}
       data-grid-columns={shellColumns}
       data-left-sidebar={isSidebarCollapsed ? "collapsed" : "open"}
-      data-right-context={isContextOpen ? "open" : "collapsed"}
-      data-state={isContextOpen ? "open" : "collapsed"}
+      data-layout="workspace-tabs"
       data-testid="workspace-shell"
       transition={{ duration: 0.3, ease: "easeInOut" }}
     >
@@ -643,26 +761,17 @@ export function TopicWorkspacePage(): JSX.Element {
       />
 
       <section
-        aria-label="Agent 对话主栏"
-        className="my-4 flex h-[calc(100vh-2rem)] min-w-0 self-center flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 px-6 py-6 shadow-surface"
-        data-testid="workspace-main-column"
+        aria-label="工作区主面板"
+        className="my-4 flex h-[calc(100vh-2rem)] min-w-0 self-center flex-col overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-surface"
+        data-testid="workspace-main-panel"
       >
-        <div className="mx-auto flex w-full max-w-[720px] items-start justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-3">
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-              Topic Workspace
-            </p>
-            <h1 className="mt-3 text-[31px] font-semibold tracking-[-0.03em] text-slate-950">
+            <h1 className="truncate text-[24px] font-semibold tracking-[-0.03em] text-slate-950">
               {topic.title}
             </h1>
-            <p className="mt-2 max-w-2xl text-[13px] leading-6 text-slate-500">
-              {topic.description || "当前话题还没有描述。"}
-            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="primary">
-              {sectionsById.collector?.status === "loading" ? "搜集中" : "已就绪"}
-            </Badge>
+          <div className="flex items-center gap-2">
             <Button
               aria-label="删除当前话题"
               disabled={isDeletingTopic}
@@ -675,272 +784,272 @@ export function TopicWorkspacePage(): JSX.Element {
           </div>
         </div>
 
-        <div className="scrollbar-subtle mt-6 flex-1 overflow-y-auto pr-2" ref={timelineScrollRef}>
-          <div className="mx-auto w-full max-w-[720px]">
-            {messagesError ? (
-              <Surface className="mb-4 border border-rose-200 bg-rose-50/80 p-4 text-sm text-rose-700">
-                {messagesError}
-              </Surface>
-            ) : null}
-            {isMessagesLoading && messages.length === 0 ? (
-              <Surface className="mb-4 p-4 text-sm text-slate-500">正在加载会话...</Surface>
-            ) : null}
-            <AgentTimeline copyDraft={copyDraft} messages={messages} />
+        <div className="border-b border-slate-100 px-4 py-3">
+          <div className="flex gap-1 rounded-2xl bg-slate-100/80 p-1">
+            {(["选题", "创作", "对话"] as const).map((tab) => (
+              <button
+                aria-pressed={activeContextTab === tab}
+                className={`flex-1 rounded-[14px] px-4 py-2 text-sm font-medium transition-colors ${
+                  activeContextTab === tab
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+                key={tab}
+                onClick={() => setActiveContextTab(tab)}
+                type="button"
+              >
+                {tab}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="mx-auto mt-5 w-full max-w-[720px]">
-          <div className="flex items-center gap-3 rounded-[24px] border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
-            <input
-              aria-label="对话输入框"
-              className="h-11 flex-1 border-0 bg-transparent px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
-              disabled={isSending}
-              onChange={(event) => setComposerValue(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  void handleSend();
-                }
-              }}
-              placeholder="输入你想继续让 Agent 处理的内容..."
-              type="text"
-              value={composerValue}
-            />
-            <Button
-              aria-label="发送消息"
-              disabled={isSending}
-              onClick={() => void handleSend()}
-              size="icon"
-              type="button"
-              variant="primary"
+        <div className="min-h-0 flex-1">
+          {activeContextTab === "对话" ? (
+            <div
+              aria-label="对话工作区"
+              className="flex h-full min-h-0 flex-col px-5 py-4"
+              data-testid="workspace-conversation-tab"
             >
-              <SendHorizontal className="h-4 w-4" strokeWidth={1.8} />
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <motion.aside
-        aria-label="右侧面板"
-        className="my-4 h-[calc(100vh-2rem)] self-center overflow-hidden rounded-[28px] border border-slate-200/80 bg-white/95 shadow-surface"
-        animate={{
-          opacity: isContextOpen ? 1 : 0.98,
-          x: isContextOpen ? 0 : 6,
-        }}
-        data-collapse-direction="right"
-        data-state={isContextOpen ? "open" : "collapsed"}
-        data-testid="workspace-context-column"
-        transition={{ duration: 0.28, ease: "easeInOut" }}
-      >
-        <div className="flex h-full flex-col">
-          <div
-            className={
-              isContextOpen
-                ? "flex items-center justify-between border-b border-slate-100 px-4 py-4"
-                : "flex items-start justify-end px-3 py-3"
-            }
-          >
-            {isContextOpen ? (
-              <motion.div
-                animate={{ opacity: 1, x: 0 }}
-                initial={{ opacity: 0, x: 14 }}
-                transition={{ duration: 0.16, ease: "easeOut" }}
+              <div
+                className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto pr-1"
+                ref={timelineScrollRef}
               >
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  Context Panels
-                </p>
-                <h2 className="mt-2 text-lg font-semibold text-slate-900">内容面板</h2>
-              </motion.div>
-            ) : (
-              <div />
-            )}
+                <div className="mx-auto w-full max-w-[840px]">
+                  {messagesError ? (
+                    <Surface className="mb-4 border border-rose-200 bg-rose-50/80 p-4 text-sm text-rose-700">
+                      {messagesError}
+                    </Surface>
+                  ) : null}
+                  {isMessagesLoading && messages.length === 0 ? (
+                    <Surface className="mb-4 p-4 text-sm text-slate-500">正在加载会话...</Surface>
+                  ) : null}
+                  <AgentTimeline copyDraft={copyDraft} messages={messages} />
+                </div>
+              </div>
 
-            <Button
-              aria-label={isContextOpen ? "收起工作区" : "展开工作区"}
-              onClick={() => setIsContextOpen((current) => !current)}
-              size="icon"
-              type="button"
-              variant="ghost"
-            >
-              {isContextOpen ? (
-                <ChevronRight className="h-4 w-4" />
-              ) : (
-                <ChevronLeft className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-
-          {/* Tab Selector */}
-          {isContextOpen ? (
-            <div className="flex gap-1 px-3 py-2">
-              <button
-                className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeContextTab === "选题"
-                    ? "bg-slate-100 text-slate-900"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-                onClick={() => setActiveContextTab("选题")}
-                type="button"
-              >
-                选题
-              </button>
-              <button
-                className={`flex-1 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  activeContextTab === "创作"
-                    ? "bg-slate-100 text-slate-900"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-                onClick={() => setActiveContextTab("创作")}
-                type="button"
-              >
-                创作
-              </button>
+              <div className="mx-auto mt-4 w-full max-w-[840px]">
+                <div className="flex items-center gap-3 rounded-[24px] border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
+                  <input
+                    aria-label="对话输入框"
+                    className="h-11 flex-1 border-0 bg-transparent px-2 text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                    disabled={isSending}
+                    onChange={(event) => setComposerValue(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        void handleSend();
+                      }
+                    }}
+                    placeholder="输入你想继续让 Agent 处理的内容..."
+                    type="text"
+                    value={composerValue}
+                  />
+                  <Button
+                    aria-label="发送消息"
+                    disabled={isSending}
+                    onClick={() => void handleSend()}
+                    size="icon"
+                    type="button"
+                    variant="primary"
+                  >
+                    <SendHorizontal className="h-4 w-4" strokeWidth={1.8} />
+                  </Button>
+                </div>
+              </div>
             </div>
-          ) : null}
-
-          {isContextOpen ? (
+          ) : (
             <motion.div
-              animate={{ opacity: 1, x: 0 }}
-              className="scrollbar-subtle flex-1 space-y-3 overflow-y-auto px-3 py-3"
-              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="scrollbar-subtle h-full overflow-y-auto px-4 py-4"
+              initial={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
-              {/* 选题 Tab: 素材、搜索结果、总结 */}
-              {activeContextTab === "选题" ? (
-                <>
-                  {sectionsById.materials ? (
-                    <ContextPanelGroup
-                      expanded={expandedGroups.materials}
-                      onToggle={() => toggleGroup("materials")}
-                      section={sectionsById.materials}
-                    >
-                      {materials.length === 0 ? (
-                        <p className="text-sm text-slate-500">空状态</p>
-                      ) : (
-                        <div className="grid gap-2">
-                          {materials.map((material) => (
-                            <article className="rounded-[18px] bg-slate-50 p-3" key={material.id}>
-                              <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">
-                                {material.type === "image"
-                                  ? "图片"
-                                  : material.type === "text"
-                                    ? "文本"
-                                    : "链接"}
-                              </p>
-                              <p className="mt-2 text-sm font-medium text-slate-900">
-                                {material.label}
-                              </p>
-                              <p className="mt-1 text-xs leading-5 text-slate-500">
-                                {material.detail}
-                              </p>
-                            </article>
-                          ))}
+              <div className="mx-auto flex w-full max-w-6xl flex-col gap-3">
+                {activeContextTab === "选题" ? (
+                  <>
+                    {sectionsById.materials ? (
+                      <ContextPanelGroup
+                        expanded={expandedGroups.materials}
+                        onToggle={() => toggleGroup("materials")}
+                        section={sectionsById.materials}
+                      >
+                        {materials.length === 0 ? (
+                          <p className="text-sm text-slate-500">空状态</p>
+                        ) : (
+                          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                            {materials.map((material) => (
+                              <article className="rounded-[18px] bg-slate-50 p-3" key={material.id}>
+                                <p className="text-[11px] uppercase tracking-[0.14em] text-slate-400">
+                                  {material.type === "image"
+                                    ? "图片"
+                                    : material.type === "text"
+                                      ? "文本"
+                                      : "链接"}
+                                </p>
+                                <p className="mt-2 text-sm font-medium text-slate-900">
+                                  {material.label}
+                                </p>
+                                <p className="mt-1 text-xs leading-5 text-slate-500">
+                                  {material.detail}
+                                </p>
+                              </article>
+                            ))}
+                          </div>
+                        )}
+                      </ContextPanelGroup>
+                    ) : null}
+
+                    {sectionsById.candidatePosts ? (
+                      <ContextPanelGroup
+                        expanded={expandedGroups.candidatePosts}
+                        onToggle={() => toggleGroup("candidatePosts")}
+                        section={sectionsById.candidatePosts}
+                      >
+                        <CandidatePostsSection
+                          onSelectedOrderChange={(nextSelectedOrder) =>
+                            void handleSelectedOrderChange(nextSelectedOrder)
+                          }
+                          posts={candidatePosts}
+                        />
+                        <div className="mt-4">
+                          <InlineRunComposer
+                            ariaLabel="搜索结果局部对话输入框"
+                            disabled={isSending}
+                            onChange={setCandidateComposerValue}
+                            onSubmit={() => void handleCandidateSend()}
+                            placeholder="输入你想继续让agent处理的内容..."
+                            value={candidateComposerValue}
+                          />
+                          {messagesError ? (
+                            <p className="mt-2 text-xs text-rose-600">{messagesError}</p>
+                          ) : null}
                         </div>
-                      )}
-                    </ContextPanelGroup>
-                  ) : null}
 
-                  {sectionsById.candidatePosts ? (
-                    <ContextPanelGroup
-                      expanded={expandedGroups.candidatePosts}
-                      onToggle={() => toggleGroup("candidatePosts")}
-                      section={sectionsById.candidatePosts}
-                    >
-                      <CandidatePostsSection
-                        onSelectedOrderChange={(nextSelectedOrder) =>
-                          void handleSelectedOrderChange(nextSelectedOrder)
+                        <div className="mt-4 border-t border-slate-100 pt-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <h3 className="text-sm font-semibold text-slate-900">总结</h3>
+                              <p className="mt-1 text-xs leading-5 text-slate-500">
+                                {patternSummary ? "当前总结结果已同步到工作区。" : "还没有总结结果。"}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              <Button
+                                disabled={isSending}
+                                onClick={() => void handleGeneratePatternSummary()}
+                                size="sm"
+                                type="button"
+                                variant="subtle"
+                              >
+                                {patternSummary ? "重新生成总结" : "生成总结"}
+                              </Button>
+                              <Button
+                                aria-label={`${expandedGroups.patternSummary ? "收起" : "展开"}总结`}
+                                aria-expanded={expandedGroups.patternSummary}
+                                className="shrink-0"
+                                onClick={() => toggleGroup("patternSummary")}
+                                size="icon"
+                                type="button"
+                                variant="ghost"
+                              >
+                                <ChevronDown
+                                  className={`h-4 w-4 transition-transform duration-200 ${
+                                    expandedGroups.patternSummary ? "rotate-180" : ""
+                                  }`.trim()}
+                                  strokeWidth={1.8}
+                                />
+                              </Button>
+                            </div>
+                          </div>
+
+                          {expandedGroups.patternSummary ? (
+                            <div className="mt-3">
+                              {patternSummary ? (
+                                <PatternSummarySection content={patternSummary} />
+                              ) : (
+                                <p className="text-sm text-slate-500">空状态</p>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      </ContextPanelGroup>
+                    ) : null}
+                  </>
+                ) : null}
+
+                {activeContextTab === "创作" ? (
+                  <>
+                    {sectionsById.copyDraft ? (
+                      <ContextPanelGroup
+                        actions={
+                          <Button
+                            disabled={isSending}
+                            onClick={() => void handleGenerateCopyDraft()}
+                            size="sm"
+                            type="button"
+                            variant="subtle"
+                          >
+                            {copyDraft ? "重新生成文案" : "生成文案"}
+                          </Button>
                         }
-                        posts={candidatePosts}
-                      />
-                    </ContextPanelGroup>
-                  ) : null}
-
-                  {sectionsById.patternSummary ? (
-                    <ContextPanelGroup
-                      actions={
-                        <Button
-                          disabled={isSending}
-                          onClick={() => void handleGeneratePatternSummary()}
-                          size="sm"
-                          type="button"
-                          variant="subtle"
-                        >
-                          {patternSummary ? "重新生成总结" : "生成总结"}
-                        </Button>
-                      }
-                      expanded={expandedGroups.patternSummary}
-                      onToggle={() => toggleGroup("patternSummary")}
-                      section={sectionsById.patternSummary}
-                    >
-                      {patternSummary ? (
-                        <PatternSummarySection
-                          content={patternSummary}
-                          section={sectionsById.patternSummary}
+                        expanded={expandedGroups.copyDraft}
+                        onToggle={() => toggleGroup("copyDraft")}
+                        section={sectionsById.copyDraft}
+                      >
+                        <CopyDraftSummaryPanel
+                          copyDraft={copyDraft ?? { title: "", body: "" }}
+                          isSaving={isCopyDraftSaving}
+                          onChange={handleCopyDraftChange}
+                          onPolishSelection={handlePolishCopyDraftSelection}
                         />
-                      ) : (
-                        <p className="text-sm text-slate-500">空状态</p>
-                      )}
-                    </ContextPanelGroup>
-                  ) : null}
-                </>
-              ) : null}
+                      </ContextPanelGroup>
+                    ) : null}
 
-              {/* 创作 Tab: 文案、图片 */}
-              {activeContextTab === "创作" ? (
-                <>
-                  {sectionsById.copyDraft ? (
-                    <ContextPanelGroup
-                      actions={
-                        <Button
-                          disabled={isSending}
-                          onClick={() => void handleGenerateCopyDraft()}
-                          size="sm"
-                          type="button"
-                          variant="subtle"
-                        >
-                          {copyDraft ? "重新生成文案" : "生成文案"}
-                        </Button>
-                      }
-                      expanded={expandedGroups.copyDraft}
-                      onToggle={() => toggleGroup("copyDraft")}
-                      section={sectionsById.copyDraft}
-                    >
-                      <CopyDraftSummaryPanel
-                        copyDraft={copyDraft ?? { title: "", body: "" }}
-                        isSaving={isCopyDraftSaving}
-                        onChange={handleCopyDraftChange}
-                      />
-                    </ContextPanelGroup>
-                  ) : null}
-
-                  {sectionsById.imageResults ? (
-                    <ContextPanelGroup
-                      expanded={expandedGroups.imageResults}
-                      onToggle={() => toggleGroup("imageResults")}
-                      section={sectionsById.imageResults}
-                    >
-                      <ImageEditorSection
-                        editorImages={editorImages}
-                        materialImages={materialImages}
-                        onEditorImagesChange={(nextImages) => void handleEditorImagesChange(nextImages)}
-                      />
-                      <div className="mt-4 border-t border-slate-100 pt-4">
-                        <p className="mb-2 text-xs font-medium text-slate-500">生成结果 ({imageResults.length})</p>
-                        <ImageResultsPanel
-                          onRemove={(imageId) => void handleRemoveGeneratedImage(imageId)}
-                          results={imageResults}
+                    {sectionsById.imageResults ? (
+                      <ContextPanelGroup
+                        expanded={expandedGroups.imageResults}
+                        onToggle={() => toggleGroup("imageResults")}
+                        section={sectionsById.imageResults}
+                      >
+                        <ImageEditorSection
+                          editorImages={editorImages}
+                          materialImages={materialImages}
+                          onEditorImagesChange={(nextImages) =>
+                            void handleEditorImagesChange(nextImages)
+                          }
                         />
-                      </div>
-                    </ContextPanelGroup>
-                  ) : null}
-                </>
-              ) : null}
+                        <div className="mt-4">
+                          <InlineRunComposer
+                            ariaLabel="图片局部对话输入框"
+                            disabled={isSending}
+                            onChange={setImageComposerValue}
+                            onSubmit={() => void handleImageSend()}
+                            placeholder="输入你想继续让agent处理的内容..."
+                            value={imageComposerValue}
+                          />
+                          {messagesError ? (
+                            <p className="mt-2 text-xs text-rose-600">{messagesError}</p>
+                          ) : null}
+                        </div>
+                        <div className="mt-4 border-t border-slate-100 pt-4">
+                          <p className="mb-2 text-xs font-medium text-slate-500">
+                            生成结果 ({imageResults.length})
+                          </p>
+                          <ImageResultsPanel
+                            onRemove={(imageId) => void handleRemoveGeneratedImage(imageId)}
+                            results={imageResults}
+                          />
+                        </div>
+                      </ContextPanelGroup>
+                    ) : null}
+                  </>
+                ) : null}
+              </div>
             </motion.div>
-          ) : (
-            <div className="flex flex-1 items-start justify-end px-3" />
           )}
         </div>
-      </motion.aside>
+      </section>
     </motion.main>
   );
 }

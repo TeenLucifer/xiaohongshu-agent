@@ -124,6 +124,24 @@ class UpdateCopyDraftRequestBody(BaseModel):
     body: str = ""
 
 
+class PolishCopyDraftSelectionRequestBody(BaseModel):
+    """Request body for AI-polishing a selected copy-draft range."""
+
+    topic_title: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("topic_title", "topicTitle"),
+    )
+    selected_text: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("selected_text", "selectedText"),
+    )
+    instruction: str = Field(min_length=1)
+    document_markdown: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("document_markdown", "documentMarkdown"),
+    )
+
+
 class MessageImageAttachmentResponse(BaseModel):
     """Lightweight image attachment rendered below final answer."""
 
@@ -316,6 +334,16 @@ class CopyDraftResponse(BaseModel):
     topic_id: str
     topic_title: str
     copy_draft: CopyDraftContentResponse
+    updated_at: datetime
+
+
+class CopyDraftSelectionPolishResponse(BaseModel):
+    """Structured response for one copy-draft selection polish action."""
+
+    topic_id: str
+    topic_title: str
+    replacement_text: str
+    message: str
     updated_at: datetime
 
 

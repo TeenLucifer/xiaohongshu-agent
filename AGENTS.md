@@ -124,6 +124,8 @@
   - 供 pattern-summary 等技能消费
 - `025-image-generation-skill`
   - 基于编辑区参考图与用户提示词生成图片，并写回 `generated_images/` 与 `image_results.json`
+- `026-selection-polish-skill`
+  - 基于整篇文案上下文和用户提示词，对当前选区进行局部润色，并返回替换文本
 
 ### 后端与集成
 

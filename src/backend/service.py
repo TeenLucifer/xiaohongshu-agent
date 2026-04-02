@@ -29,6 +29,7 @@ from backend.schemas import (
     CandidatePostImageResponse,
     CopyDraftContentResponse,
     CopyDraftResponse,
+    CopyDraftSelectionPolishResponse,
     CreateTopicResponse,
     DeleteImageResultResponse,
     DeleteTopicResponse,
@@ -71,6 +72,7 @@ from backend.topic_truth_store import SessionWorkspaceStore
 
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
 _TOOL_SUMMARY_MAX_LENGTH = 200
+_SELECTION_POLISH_RESULT_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
 
 _CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -626,6 +628,102 @@ class BackendAppService:
             updated_at=updated_at,
         )
 
+    def polish_copy_draft_selection(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        selected_text: str,
+        instruction: str,
+        document_markdown: str,
+    ) -> CopyDraftSelectionPolishResponse:
+        normalized_selected_text = selected_text.strip()
+        normalized_instruction = instruction.strip()
+        normalized_document = document_markdown.strip()
+        if normalized_selected_text == "":
+            raise BackendApiError(
+                error_code="empty_selection",
+                message="请先在文案区选中需要润色的文本。",
+                status_code=400,
+            )
+        if normalized_instruction == "":
+            raise BackendApiError(
+                error_code="empty_polish_instruction",
+                message="请输入本次润色要求。",
+                status_code=400,
+            )
+        if normalized_document == "":
+            raise BackendApiError(
+                error_code="empty_copy_draft",
+                message="当前文案为空，无法执行选区润色。",
+                status_code=400,
+            )
+
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        previous_message_count = len(session.messages)
+        try:
+            result = self._run_runtime_request(
+                AgentRunRequest(
+                    session_id=session.session_id,
+                    user_input=_build_selection_polish_prompt(
+                        selected_text=normalized_selected_text,
+                        instruction=normalized_instruction,
+                        document_markdown=document_markdown,
+                    ),
+                    attachments=[],
+                    metadata={"internal_action": "selection_polish"},
+                ),
+                trace_collector=None,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._rollback_session_messages(
+                session_id=session.session_id,
+                boundary=previous_message_count,
+            )
+            raise BackendApiError(
+                error_code="selection_polish_failed",
+                message="AI 润色执行失败。",
+                details={"reason": str(exc)},
+            ) from exc
+
+        try:
+            parsed = _parse_selection_polish_result(result.final_text)
+        except BackendApiError:
+            self._rollback_session_messages(
+                session_id=session.session_id,
+                boundary=previous_message_count,
+            )
+            raise
+
+        fresh_session = self._rollback_session_messages(
+            session_id=session.session_id,
+            boundary=previous_message_count,
+        )
+        fresh_session.add_message(
+            SessionMessage(
+                role="user",
+                content=normalized_instruction,
+            )
+        )
+        fresh_session.add_message(
+            SessionMessage(
+                role="assistant",
+                name="协作 Agent",
+                content=parsed["message"],
+            )
+        )
+        self._runtime.session_manager.save(fresh_session)
+        record.updated_at = now_local()
+        self._topic_store.save(record)
+        self._sync_topic_meta(record, description=None)
+        return CopyDraftSelectionPolishResponse(
+            topic_id=record.topic_id,
+            topic_title=self._current_topic_title(fresh_session, fallback=topic_title),
+            replacement_text=parsed["replacement_text"],
+            message=parsed["message"],
+            updated_at=record.updated_at,
+        )
+
     def delete_image_result(
         self,
         *,
@@ -998,9 +1096,62 @@ class BackendAppService:
             self._runtime.session_manager.save(session)
             return
 
+    def _rollback_session_messages(self, *, session_id: str, boundary: int) -> Session:
+        session = self._runtime.session_manager.require(session_id)
+        if len(session.messages) > boundary:
+            session.messages = session.messages[:boundary]
+            session.updated_at = now_local()
+            self._runtime.session_manager.save(session)
+        return session
+
 
 def _format_message_time(value: datetime) -> str:
     return value.strftime("%H:%M")
+
+
+def _build_selection_polish_prompt(
+    *,
+    selected_text: str,
+    instruction: str,
+    document_markdown: str,
+) -> str:
+    return (
+        "请使用 selection-polish skill 完成这次文案选区润色任务。\n"
+        "你必须读取下面提供的整篇文案上下文，但只润色指定选区，不要改其它内容。\n"
+        "不要写任何文件，不要返回整篇文案。\n"
+        "最终只返回一个 JSON 对象，不要添加解释、Markdown 或代码块，格式如下：\n"
+        '{"replacement_text":"...", "message":"..."}\n\n'
+        "[Current Draft Markdown]\n"
+        f"{document_markdown}\n\n"
+        "[Selected Text]\n"
+        f"{selected_text}\n\n"
+        "[User Instruction]\n"
+        f"{instruction}\n"
+    )
+
+
+def _parse_selection_polish_result(result_text: str) -> dict[str, str]:
+    candidates = [result_text.strip()]
+    match = _SELECTION_POLISH_RESULT_RE.search(result_text)
+    if match is not None:
+        candidates.insert(0, match.group(1).strip())
+
+    for candidate in candidates:
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        replacement_text = str(payload.get("replacement_text", "")).strip()
+        message = str(payload.get("message", "")).strip()
+        if replacement_text == "" or message == "":
+            continue
+        return {"replacement_text": replacement_text, "message": message}
+
+    raise BackendApiError(
+        error_code="invalid_selection_polish_result",
+        message="AI 润色返回了无效结果。",
+        details={"result": result_text},
+    )
 
 
 def _build_tool_summary(

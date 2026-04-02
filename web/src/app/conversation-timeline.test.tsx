@@ -5,6 +5,7 @@ import { vi } from "vitest";
 import { AppRoutes } from "./routes";
 
 async function renderWorkspace(): Promise<ReturnType<typeof render>> {
+  const user = userEvent.setup();
   const view = render(
     <MemoryRouter
       future={{ v7_relativeSplatPath: true, v7_startTransition: true }}
@@ -13,7 +14,9 @@ async function renderWorkspace(): Promise<ReturnType<typeof render>> {
       <AppRoutes />
     </MemoryRouter>
   );
-  await screen.findByRole("region", { name: "Agent 对话主栏" });
+  await screen.findByTestId("workspace-main-panel");
+  await user.click(await screen.findByRole("button", { name: "对话" }));
+  await screen.findByTestId("workspace-conversation-tab");
   return view;
 }
 
@@ -22,6 +25,9 @@ describe("conversation timeline feature", () => {
     await renderWorkspace();
 
     expect(screen.getByRole("list", { name: "对话消息流" })).toBeInTheDocument();
+    expect(screen.queryByText("Conversation")).not.toBeInTheDocument();
+    expect(screen.queryByText("对话记录")).not.toBeInTheDocument();
+    expect(screen.queryByText("这里集中展示 user / agent 对话结果与执行反馈。")).not.toBeInTheDocument();
     expect(await screen.findByText(/先围绕春季通勤穿搭去找一批高热度帖子/)).toBeInTheDocument();
     expect(await screen.findByText(/第一轮搜集已经完成/)).toBeInTheDocument();
     expect(screen.queryByText("查看详细日志")).not.toBeInTheDocument();

@@ -10,6 +10,7 @@
 - 服务启动时长期持有一个 `AgentRuntime`
 - 固定 `topic_id -> session_id` 的最小映射规则
 - 为前端主栏对话提供同步 API
+- 为右侧文案编辑器提供最小专用动作 API
 - 固定后端薄 DTO 边界
 - 固定最小错误返回结构
 - 与前端主栏一起完成第一版真实 API 接线
@@ -42,8 +43,9 @@
   - `WorkspaceResponse`
   - `RunResponse`
   - `MessagesResponse`
-  - `ResetResponse`
-  - `ErrorResponse`
+- `ResetResponse`
+- `CopyDraftSelectionPolishResponse`
+- `ErrorResponse`
 
 ## 约束
 
@@ -75,6 +77,7 @@
 - 第一版后端只服务前端主栏对话
 - 第一版前端接入范围只包含主栏，不包含右侧工作区真实化
 - 第一版主栏 API 不负责候选帖子、总结、文案、图片结果等 session workspace 对象
+- 文案编辑区允许使用一个专用动作接口执行“选区 AI 润色”，但该接口仍复用同一 session/runtime 真相层
 - 随着 `025-image-generation-skill` 接入，主栏消息 DTO 允许附带轻量图片附件元数据
 - 后端返回薄 DTO，不直接暴露 runtime 内部模型
 - 错误返回采用最小清晰结构，不做复杂任务状态机
@@ -183,6 +186,31 @@
 - `last_run.final_text`
 - `last_run.tool_calls`
 - `last_run.artifacts`
+- `updated_at`
+
+### `POST /api/topics/{topic_id}/copy-draft/polish-selection`
+
+输入：
+
+- `topic_title`
+- `selected_text`
+- `instruction`
+- `document_markdown`
+
+行为：
+
+- resolve 当前 session
+- 通过 runtime 触发一次内部 `selection-polish` 执行
+- 读取整篇文案上下文，但只返回选区替换文本
+- 不直接写 `copy_draft.json`
+- 会向 session history 追加一条 assistant 结果消息，但不暴露内部 prompt
+
+返回：
+
+- `topic_id`
+- `topic_title`
+- `replacement_text`
+- `message`
 - `updated_at`
 
 ### `GET /api/topics/{topic_id}/messages`

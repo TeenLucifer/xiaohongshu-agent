@@ -116,4 +116,72 @@ describe("ImageEditorSection", () => {
       }),
     ]);
   });
+
+  it("does not append duplicate material image into editor area", () => {
+    const onEditorImagesChange = vi.fn();
+
+    render(
+      <ImageEditorSection
+        editorImages={editorImages}
+        materialImages={materialImages}
+        onEditorImagesChange={onEditorImagesChange}
+      />
+    );
+
+    const dropZone = screen.getByText("编辑区 (1)").nextElementSibling;
+    if (!(dropZone instanceof HTMLElement)) {
+      throw new Error("drop zone not found");
+    }
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: {
+        getData: () => JSON.stringify(materialImages[0]),
+      },
+    });
+
+    expect(onEditorImagesChange).not.toHaveBeenCalled();
+  });
+
+  it("does not append duplicate generated image into editor area", () => {
+    const onEditorImagesChange = vi.fn();
+
+    render(
+      <ImageEditorSection
+        editorImages={[
+          ...editorImages,
+          {
+            id: "editor-2",
+            order: 2,
+            sourceType: "generated",
+            sourceGeneratedImageId: "generated-1",
+            imageUrl: "https://example.com/generated-1.png",
+            imagePath: "generated_images/generated-1.png",
+            alt: "生成图 1",
+          },
+        ]}
+        materialImages={materialImages}
+        onEditorImagesChange={onEditorImagesChange}
+      />
+    );
+
+    const dropZone = screen.getByText("编辑区 (2)").nextElementSibling;
+    if (!(dropZone instanceof HTMLElement)) {
+      throw new Error("drop zone not found");
+    }
+
+    fireEvent.drop(dropZone, {
+      dataTransfer: {
+        getData: () =>
+          JSON.stringify({
+            id: "generated-1",
+            sourceType: "generated",
+            imageUrl: "https://example.com/generated-1.png",
+            imagePath: "generated_images/generated-1.png",
+            alt: "生成图 1",
+          }),
+      },
+    });
+
+    expect(onEditorImagesChange).not.toHaveBeenCalled();
+  });
 });

@@ -59,7 +59,6 @@ export function WorkspaceSidebar({
           <div className="flex min-w-0 items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-slate-900">小红书运营台</p>
-              <p className="truncate text-xs text-slate-500">Topic Workspace</p>
             </div>
             <Button aria-label="收起侧边栏" onClick={onToggleCollapse} size="icon" type="button" variant="ghost">
               <PanelLeftClose className="h-4 w-4" strokeWidth={1.8} />

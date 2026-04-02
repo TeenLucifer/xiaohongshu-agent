@@ -35,22 +35,27 @@
 22. 确认 `messages` 中只包含主栏所需的 `user/agent` 消息，不直接包含 `tool` 消息
 23. 再调用 `GET /messages`
 24. 确认能拿到最新消息列表
-25. 调用 `POST /reset`
-26. 传入 `topic_title`
-27. 确认当前活跃 session 被重置
-28. 确认返回的工作区视图中主栏消息已清空
-29. 构造一次 runtime 或 provider 错误
-30. 确认后端返回统一的 `ErrorResponse`
-31. 启动前端 dev server，并配置 `VITE_API_BASE_URL`
-32. 进入某个 topic 工作台页面
-33. 确认主栏初次加载会请求真实 `GET /workspace`
-34. 在主栏输入一条消息并发送
-35. 确认页面调用真实 `POST /runs`
-36. 确认主栏显示真实 agent 回复，而不是本地 `createAgentReply(...)` mock 文本
-37. 若组合 `021` 的右侧 `context` 读取能力
-38. 确认右侧 `candidatePosts` / `patternSummary` 已可走真实读取
-39. 确认后端是先 resolve 当前 active session，再读取该 session 的 workspace 数据
-40. 确认 `POST /reset` 后，主栏消息与右侧 workspace 数据语义保持一致
+25. 调用 `POST /api/topics/{topic_id}/copy-draft/polish-selection`
+26. 传入 `topic_title`、`selected_text`、`instruction`、`document_markdown`
+27. 确认返回中包含 `replacement_text` 和 `message`
+28. 再调用 `GET /messages`
+29. 确认消息列表中只新增一条 assistant 结果消息，不暴露内部 prompt
+30. 调用 `POST /reset`
+31. 传入 `topic_title`
+32. 确认当前活跃 session 被重置
+33. 确认返回的工作区视图中主栏消息已清空
+34. 构造一次 runtime 或 provider 错误
+35. 确认后端返回统一的 `ErrorResponse`
+36. 启动前端 dev server，并配置 `VITE_API_BASE_URL`
+37. 进入某个 topic 工作台页面
+38. 确认主栏初次加载会请求真实 `GET /workspace`
+39. 在主栏输入一条消息并发送
+40. 确认页面调用真实 `POST /runs`
+41. 确认主栏显示真实 agent 回复，而不是本地 `createAgentReply(...)` mock 文本
+42. 若组合 `021` 的右侧 `context` 读取能力
+43. 确认右侧 `candidatePosts` / `patternSummary` 已可走真实读取
+44. 确认后端是先 resolve 当前 active session，再读取该 session 的 workspace 数据
+45. 确认 `POST /reset` 后，主栏消息与右侧 workspace 数据语义保持一致
 
 ## 自动化验收
 
@@ -61,6 +66,7 @@
 - `GET /workspace` 接口测试通过
 - `POST /runs` 同步执行测试通过
 - `GET /messages` 接口测试通过
+- `POST /copy-draft/polish-selection` 接口测试通过
 - `POST /reset` 接口测试通过
 - 薄 DTO 转换测试通过
 - `tool` 消息不进入主栏 DTO 测试通过
