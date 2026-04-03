@@ -16,8 +16,9 @@ from pathlib import Path
 from typing import Any, Literal, cast
 from uuid import uuid4
 
+from agent.models import PromptMessage, ToolCallSummary
 from agent.models import RunRequest as AgentRunRequest
-from agent.models import ToolCallSummary
+from agent.provider import ProviderConfig, create_default_model_client
 from agent.run_events import RunEventSink
 from agent.runtime import AgentRuntime
 from agent.session.models import Session, SessionImageAttachment, SessionMessage
@@ -45,11 +46,14 @@ from backend.schemas import (
     MessageResponse,
     MessagesResponse,
     PatternSummaryContentResponse,
+    ProviderSettingsResponse,
     ResetResponse,
     RunResponse,
+    SettingsResponse,
     SkillListItemResponse,
     SkillsListResponse,
     StreamingRunEvent,
+    TestProviderSettingsResponse,
     TopicListItemResponse,
     TopicListResponse,
     TopicMetaRecord,
@@ -75,6 +79,14 @@ from backend.topic_truth_store import SessionWorkspaceStore
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n?", re.DOTALL)
 _TOOL_SUMMARY_MAX_LENGTH = 200
 _SELECTION_POLISH_RESULT_RE = re.compile(r"```json\s*(\{.*?\})\s*```", re.DOTALL)
+_DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
+_DEFAULT_VISION_BASE_URL = "https://api.siliconflow.cn/v1"
+_DEFAULT_VISION_MODEL = "Qwen/Qwen2.5-VL-32B-Instruct"
+_DEFAULT_IMAGE_BASE_URL = "https://aihubmix.com/v1"
+_DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image-preview"
+_TINY_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO6p8tQAAAAASUVORK5CYII="
+)
 
 _CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
@@ -134,10 +146,123 @@ class BackendAppService:
                     description=meta.description,
                     session_id=mapping.session_id,
                     updated_at=max(meta.updated_at, mapping.updated_at),
+                    preview_image_url=self._resolve_topic_preview_image_url(
+                        topic_id=meta.topic_id,
+                        session_id=mapping.session_id,
+                    ),
                 )
             )
         items.sort(key=lambda item: item.updated_at, reverse=True)
         return TopicListResponse(items=items)
+
+    def get_settings(self) -> SettingsResponse:
+        llm_payload = self._read_llm_settings()
+        image_analysis_payload = self._read_skill_settings("image-analysis")
+        image_generation_payload = self._read_skill_settings("image-generation")
+        return SettingsResponse(
+            llm=ProviderSettingsResponse(**llm_payload),
+            image_analysis=ProviderSettingsResponse(**image_analysis_payload),
+            image_generation=ProviderSettingsResponse(**image_generation_payload),
+        )
+
+    def update_llm_settings(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        api_key: str | None,
+    ) -> ProviderSettingsResponse:
+        current = self._read_llm_env_payload()
+        next_api_key = current.get("OPENAI_API_KEY", "")
+        if api_key is not None:
+            next_api_key = api_key.strip()
+        env_values = {
+            "OPENAI_BASE_URL": base_url.strip(),
+            "OPENAI_MODEL": model.strip(),
+            "OPENAI_API_KEY": next_api_key,
+        }
+        self._write_env_values(env_values)
+        self._reload_runtime_provider()
+        return ProviderSettingsResponse(**self._read_llm_settings())
+
+    def update_image_analysis_settings(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        api_key: str | None,
+    ) -> ProviderSettingsResponse:
+        self._write_skill_settings(
+            "image-analysis",
+            {
+                "base_url": base_url.strip(),
+                "model": model.strip(),
+                "api_key": api_key,
+            },
+        )
+        return ProviderSettingsResponse(**self._read_skill_settings("image-analysis"))
+
+    def update_image_generation_settings(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        api_key: str | None,
+    ) -> ProviderSettingsResponse:
+        self._write_skill_settings(
+            "image-generation",
+            {
+                "base_url": base_url.strip(),
+                "model": model.strip(),
+                "api_key": api_key,
+            },
+        )
+        return ProviderSettingsResponse(**self._read_skill_settings("image-generation"))
+
+    def test_llm_settings(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        api_key: str | None,
+    ) -> TestProviderSettingsResponse:
+        resolved_api_key = self._resolve_llm_api_key(api_key)
+        self._test_llm_connection(
+            base_url=base_url.strip(),
+            model=model.strip(),
+            api_key=resolved_api_key,
+        )
+        return TestProviderSettingsResponse(success=True, message="主 LLM 连接成功。")
+
+    def test_image_analysis_settings(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        api_key: str | None,
+    ) -> TestProviderSettingsResponse:
+        resolved_api_key = self._resolve_skill_api_key("image-analysis", api_key)
+        self._test_image_analysis_connection(
+            base_url=base_url.strip(),
+            model=model.strip(),
+            api_key=resolved_api_key,
+        )
+        return TestProviderSettingsResponse(success=True, message="图片识别连接成功。")
+
+    def test_image_generation_settings(
+        self,
+        *,
+        base_url: str,
+        model: str,
+        api_key: str | None,
+    ) -> TestProviderSettingsResponse:
+        resolved_api_key = self._resolve_skill_api_key("image-generation", api_key)
+        self._test_image_generation_connection(
+            base_url=base_url.strip(),
+            model=model.strip(),
+            api_key=resolved_api_key,
+        )
+        return TestProviderSettingsResponse(success=True, message="图片生成连接成功。")
 
     def list_skills(self) -> SkillsListResponse:
         skills_by_path: dict[Path, SkillRecord] = {}
@@ -532,7 +657,10 @@ class BackendAppService:
         return MaterialsResponse(
             topic_id=record.topic_id,
             topic_title=self._current_topic_title(session, fallback=topic_title),
-            items=[self._convert_material(topic_id=topic_id, record=item) for item in document.items],
+            items=[
+                self._convert_material(topic_id=topic_id, record=item)
+                for item in document.items
+            ],
             updated_at=updated_at,
         )
 
@@ -568,7 +696,10 @@ class BackendAppService:
         return MaterialsResponse(
             topic_id=record.topic_id,
             topic_title=self._current_topic_title(session, fallback=topic_title),
-            items=[self._convert_material(topic_id=topic_id, record=item) for item in document.items],
+            items=[
+                self._convert_material(topic_id=topic_id, record=item)
+                for item in document.items
+            ],
             updated_at=updated_at,
         )
 
@@ -628,7 +759,10 @@ class BackendAppService:
         return MaterialsResponse(
             topic_id=record.topic_id,
             topic_title=self._current_topic_title(session, fallback=topic_title),
-            items=[self._convert_material(topic_id=topic_id, record=item) for item in document.items],
+            items=[
+                self._convert_material(topic_id=topic_id, record=item)
+                for item in document.items
+            ],
             updated_at=updated_at,
         )
 
@@ -1277,6 +1411,217 @@ class BackendAppService:
             return set()
         return {item.id for item in document.items}
 
+    def _resolve_topic_preview_image_url(
+        self,
+        *,
+        topic_id: str,
+        session_id: str,
+    ) -> str | None:
+        document = self._workspace_store.read_image_results(session_id)
+        if document is None or len(document.items) == 0:
+            return None
+        first_item = document.items[0]
+        return _to_topic_asset_url(topic_id=topic_id, relative_path=first_item.image_path)
+
+    def _read_llm_settings(self) -> dict[str, Any]:
+        payload = self._read_llm_env_payload()
+        api_key = payload.get("OPENAI_API_KEY", "").strip()
+        base_url = payload.get("OPENAI_BASE_URL", "").strip() or _DEFAULT_LLM_BASE_URL
+        model = payload.get("OPENAI_MODEL", "").strip()
+        return {
+            "base_url": base_url,
+            "model": model,
+            "api_key": api_key,
+            "api_key_configured": api_key != "",
+            "api_key_masked": _mask_secret(api_key),
+        }
+
+    def _read_skill_settings(self, skill_name: str) -> dict[str, Any]:
+        config_path = self._get_skill_config_path(skill_name)
+        payload = self._read_json_file(config_path)
+        api_key = str(payload.get("api_key", "")).strip()
+        if skill_name == "image-analysis":
+            raw_base_url = str(payload.get("base_url", _DEFAULT_VISION_BASE_URL)).strip()
+            raw_model = str(payload.get("model", _DEFAULT_VISION_MODEL)).strip()
+            base_url = raw_base_url or _DEFAULT_VISION_BASE_URL
+            model = raw_model or _DEFAULT_VISION_MODEL
+        else:
+            raw_base_url = str(payload.get("base_url", _DEFAULT_IMAGE_BASE_URL)).strip()
+            raw_model = str(payload.get("model", _DEFAULT_IMAGE_MODEL)).strip()
+            base_url = raw_base_url or _DEFAULT_IMAGE_BASE_URL
+            model = raw_model or _DEFAULT_IMAGE_MODEL
+        return {
+            "base_url": base_url,
+            "model": model,
+            "api_key": api_key,
+            "api_key_configured": api_key != "",
+            "api_key_masked": _mask_secret(api_key),
+        }
+
+    def _read_llm_env_payload(self) -> dict[str, str]:
+        env_path = self._runtime.project_root / ".env"
+        payload: dict[str, str] = {}
+        if not env_path.exists():
+            return payload
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if stripped == "" or stripped.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            payload[key.strip()] = value.strip()
+        return payload
+
+    def _write_env_values(self, updates: dict[str, str]) -> None:
+        env_path = self._runtime.project_root / ".env"
+        lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.exists() else []
+        output_lines: list[str] = []
+        seen: set[str] = set()
+        for line in lines:
+            if "=" not in line or line.lstrip().startswith("#"):
+                output_lines.append(line)
+                continue
+            key, _ = line.split("=", 1)
+            normalized = key.strip()
+            if normalized in updates:
+                output_lines.append(f"{normalized}={updates[normalized]}")
+                seen.add(normalized)
+            else:
+                output_lines.append(line)
+        for key, value in updates.items():
+            if key not in seen:
+                output_lines.append(f"{key}={value}")
+        env_path.write_text("\n".join(output_lines).rstrip() + "\n", encoding="utf-8")
+
+    def _get_skill_config_path(self, skill_name: str) -> Path:
+        return self._runtime.project_root / "skills" / skill_name / "config.json"
+
+    def _read_json_file(self, path: Path) -> dict[str, Any]:
+        if not path.exists():
+            return {}
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise BackendApiError(
+                error_code="invalid_config_file",
+                message=f"配置文件格式错误：{path.name}",
+                details={"reason": str(exc), "path": str(path)},
+                status_code=500,
+            ) from exc
+        if not isinstance(payload, dict):
+            raise BackendApiError(
+                error_code="invalid_config_file",
+                message=f"配置文件格式错误：{path.name}",
+                details={"path": str(path)},
+                status_code=500,
+            )
+        return payload
+
+    def _write_skill_settings(self, skill_name: str, updates: dict[str, str | None]) -> None:
+        path = self._get_skill_config_path(skill_name)
+        payload = self._read_json_file(path)
+        if skill_name == "image-analysis":
+            payload.setdefault("base_url", _DEFAULT_VISION_BASE_URL)
+            payload.setdefault("model", _DEFAULT_VISION_MODEL)
+        elif skill_name == "image-generation":
+            payload.setdefault("base_url", _DEFAULT_IMAGE_BASE_URL)
+            payload.setdefault("model", _DEFAULT_IMAGE_MODEL)
+            payload.setdefault("size", "1024x1024")
+        for key, value in updates.items():
+            if value is None:
+                continue
+            payload[key] = value.strip()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"{json.dumps(payload, ensure_ascii=False, indent=2)}\n", encoding="utf-8")
+
+    def _resolve_llm_api_key(self, api_key: str | None) -> str:
+        candidate = (api_key or "").strip()
+        if candidate != "":
+            return candidate
+        saved = self._read_llm_env_payload().get("OPENAI_API_KEY", "").strip()
+        if saved != "":
+            return saved
+        raise BackendApiError(
+            error_code="missing_api_key",
+            message="请先填写 API Key。",
+            status_code=400,
+        )
+
+    def _resolve_skill_api_key(self, skill_name: str, api_key: str | None) -> str:
+        candidate = (api_key or "").strip()
+        if candidate != "":
+            return candidate
+        payload = self._read_json_file(self._get_skill_config_path(skill_name))
+        saved = str(payload.get("api_key", "")).strip()
+        if saved != "":
+            return saved
+        raise BackendApiError(
+            error_code="missing_api_key",
+            message="请先填写 API Key。",
+            status_code=400,
+        )
+
+    def _reload_runtime_provider(self) -> None:
+        env_payload = self._read_llm_env_payload()
+        config = ProviderConfig.load(
+            OPENAI_API_KEY=env_payload.get("OPENAI_API_KEY"),
+            OPENAI_BASE_URL=env_payload.get("OPENAI_BASE_URL"),
+            OPENAI_MODEL=env_payload.get("OPENAI_MODEL"),
+        )
+        self._runtime.provider_config = config
+        self._runtime.model_client = create_default_model_client(config)
+        if hasattr(self._runtime.loop_runner, "model_client"):
+            cast(Any, self._runtime.loop_runner).model_client = self._runtime.model_client
+        if hasattr(self._runtime.loop_runner, "memory_consolidator"):
+            cast(Any, self._runtime.loop_runner).memory_consolidator = None
+
+    def _test_llm_connection(self, *, base_url: str, model: str, api_key: str) -> None:
+        config = ProviderConfig.load(
+            OPENAI_API_KEY=api_key,
+            OPENAI_BASE_URL=base_url,
+            OPENAI_MODEL=model,
+        )
+        client = create_default_model_client(config)
+        client.complete(
+            messages=[PromptMessage(role="user", content="请回复 ok")],
+            tool_definitions=[],
+        )
+
+    def _test_image_analysis_connection(self, *, base_url: str, model: str, api_key: str) -> None:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "请回复 ok"},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/png;base64,{_TINY_PNG_BASE64}"},
+                        },
+                    ],
+                }
+            ],
+            max_tokens=32,
+        )
+
+    def _test_image_generation_connection(self, *, base_url: str, model: str, api_key: str) -> None:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        client.chat.completions.create(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "生成一张简单的纯色占位图。"}],
+                }
+            ],
+            modalities=cast(Any, ["text", "image"]),
+        )
+
     def _attach_latest_generated_image(
         self,
         *,
@@ -1427,6 +1772,15 @@ def _to_workspace_asset_path(*, post_id: str, relative_path: str) -> str:
 def _to_topic_asset_url(*, topic_id: str, relative_path: str) -> str:
     normalized = relative_path.replace("\\", "/").lstrip("/")
     return f"/api/topics/{topic_id}/assets/{normalized}"
+
+
+def _mask_secret(value: str) -> str | None:
+    normalized = value.strip()
+    if normalized == "":
+        return None
+    if len(normalized) <= 8:
+        return "已配置"
+    return f"{normalized[:4]}...{normalized[-4:]}"
 
 
 def _split_requirements(raw: str) -> list[str]:

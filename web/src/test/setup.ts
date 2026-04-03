@@ -69,6 +69,23 @@ let imageResultsStore = JSON.parse(JSON.stringify(mockImageResultsByTopicId)) as
   string,
   typeof mockImageResultsByTopicId[string]
 >;
+let settingsStore = {
+  llm: {
+    base_url: "https://api.openai.com/v1",
+    model: "gpt-5.4",
+    api_key: "sk-llm-test-key",
+  },
+  image_analysis: {
+    base_url: "https://api.siliconflow.cn/v1",
+    model: "Qwen/Qwen2.5-VL-32B-Instruct",
+    api_key: "sk-vision-test-key",
+  },
+  image_generation: {
+    base_url: "https://aihubmix.com/v1",
+    model: "gemini-2.5-flash-image-preview",
+    api_key: "sk-image-test-key",
+  },
+};
 let createdTopicCounter = 0;
 const mockSkills = [
   {
@@ -116,6 +133,23 @@ beforeEach(() => {
     string,
     typeof mockImageResultsByTopicId[string]
   >;
+  settingsStore = {
+    llm: {
+      base_url: "https://api.openai.com/v1",
+      model: "gpt-5.4",
+      api_key: "sk-llm-test-key",
+    },
+    image_analysis: {
+      base_url: "https://api.siliconflow.cn/v1",
+      model: "Qwen/Qwen2.5-VL-32B-Instruct",
+      api_key: "sk-vision-test-key",
+    },
+    image_generation: {
+      base_url: "https://aihubmix.com/v1",
+      model: "gemini-2.5-flash-image-preview",
+      api_key: "sk-image-test-key",
+    },
+  };
   createdTopicCounter = 0;
 });
 
@@ -148,6 +182,130 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
     return new Response(
       JSON.stringify({
         items: mockSkills
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path === "/api/settings" && (init?.method === undefined || init.method === "GET")) {
+    return new Response(
+      JSON.stringify({
+        llm: {
+          base_url: settingsStore.llm.base_url,
+          model: settingsStore.llm.model,
+          api_key: settingsStore.llm.api_key,
+          api_key_configured: settingsStore.llm.api_key.length > 0,
+          api_key_masked: settingsStore.llm.api_key.length > 0 ? "sk-llm...-key" : null,
+        },
+        image_analysis: {
+          base_url: settingsStore.image_analysis.base_url,
+          model: settingsStore.image_analysis.model,
+          api_key: settingsStore.image_analysis.api_key,
+          api_key_configured: settingsStore.image_analysis.api_key.length > 0,
+          api_key_masked:
+            settingsStore.image_analysis.api_key.length > 0 ? "sk-vis...-key" : null,
+        },
+        image_generation: {
+          base_url: settingsStore.image_generation.base_url,
+          model: settingsStore.image_generation.model,
+          api_key: settingsStore.image_generation.api_key,
+          api_key_configured: settingsStore.image_generation.api_key.length > 0,
+          api_key_masked:
+            settingsStore.image_generation.api_key.length > 0 ? "sk-img...-key" : null,
+        },
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (/^\/api\/settings\/(llm|image-analysis|image-generation)$/.test(path) && init?.method === "PUT") {
+    const rawBody = init.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as { base_url?: string; model?: string; api_key?: string | null })
+        : {};
+    const target =
+      path.endsWith("/llm")
+        ? settingsStore.llm
+        : path.endsWith("/image-analysis")
+          ? settingsStore.image_analysis
+          : settingsStore.image_generation;
+    target.base_url = parsedBody.base_url ?? target.base_url;
+    target.model = parsedBody.model ?? target.model;
+    if (parsedBody.api_key !== undefined && parsedBody.api_key !== null) {
+      target.api_key = parsedBody.api_key;
+    }
+
+    const masked =
+      target.api_key.length > 0
+        ? target === settingsStore.llm
+          ? "sk-llm...-key"
+          : target === settingsStore.image_analysis
+            ? "sk-vis...-key"
+            : "sk-img...-key"
+        : null;
+
+    return new Response(
+      JSON.stringify({
+        base_url: target.base_url,
+        model: target.model,
+        api_key: target.api_key,
+        api_key_configured: target.api_key.length > 0,
+        api_key_masked: masked,
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (
+    /^\/api\/settings\/(llm|image-analysis|image-generation)\/test$/.test(path) &&
+    init?.method === "POST"
+  ) {
+    const rawBody = init.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as { base_url?: string; model?: string; api_key?: string | null })
+        : {};
+    const target =
+      path.includes("/llm/")
+        ? settingsStore.llm
+        : path.includes("/image-analysis/")
+          ? settingsStore.image_analysis
+          : settingsStore.image_generation;
+    const hasBaseUrl = Boolean(parsedBody.base_url?.trim());
+    const hasModel = Boolean(parsedBody.model?.trim());
+    const hasApiKey = Boolean(parsedBody.api_key?.trim()) || target.api_key.trim().length > 0;
+
+    if (!hasBaseUrl || !hasModel || !hasApiKey) {
+      return new Response(
+        JSON.stringify({
+          message: "测试配置不完整",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        }
+      );
+    }
+
+    const successMessage = path.endsWith("/llm/test")
+      ? "主 LLM 连接成功。"
+      : path.endsWith("/image-analysis/test")
+        ? "图片识别连接成功。"
+        : "图片生成连接成功。";
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: successMessage,
       }),
       {
         status: 200,

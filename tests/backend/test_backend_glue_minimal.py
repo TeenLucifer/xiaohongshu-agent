@@ -19,6 +19,8 @@ from backend.topic_truth_models import (
     CopyDraftRecord,
     EditorImageRecord,
     EditorImagesDocument,
+    GeneratedImageResultRecord,
+    ImageResultsRecord,
     PatternSummaryRecord,
     PostContent,
     PostDetail,
@@ -281,6 +283,230 @@ def test_workspace_reuses_active_session_and_updates_title(tmp_path: Path) -> No
     topic_meta_path = tmp_path / "data" / "sessions" / session_id / "topic.json"
     topic_meta = json.loads(topic_meta_path.read_text(encoding="utf-8"))
     assert topic_meta["title"] == "新标题"
+
+
+def test_list_topics_returns_preview_image_url_from_first_generated_image(tmp_path: Path) -> None:
+    async def run() -> list[dict[str, Any]]:
+        async with make_client(tmp_path) as client:
+            workspace = (
+                await client.get(
+                    "/api/topics/topic-1/workspace",
+                    params={"topic_title": "话题一"},
+                )
+            ).json()
+            session_id = cast(str, workspace["session_id"])
+            store = SessionWorkspaceStore(tmp_path / "data")
+            generated_root = store.get_generated_images_root(session_id)
+            generated_root.mkdir(parents=True, exist_ok=True)
+            (generated_root / "preview.png").write_bytes(b"fake-image")
+            now = now_local()
+            store.write_image_results(
+                session_id,
+                ImageResultsRecord(
+                    items=[
+                        GeneratedImageResultRecord(
+                            id="gen-1",
+                            image_path="generated_images/preview.png",
+                            alt="预览图",
+                            prompt="生成图",
+                            source_editor_image_ids=[],
+                            created_at=now,
+                        )
+                    ],
+                    updated_at=now,
+                ),
+            )
+
+            response = await client.get("/api/topics")
+            assert response.status_code == 200
+            return cast(list[dict[str, Any]], response.json()["items"])
+
+    items = asyncio.run(run())
+    assert items[0]["topic_id"] == "topic-1"
+    assert (
+        items[0]["preview_image_url"]
+        == "/api/topics/topic-1/assets/generated_images/preview.png"
+    )
+
+
+def test_settings_endpoint_reads_env_and_skill_config_files(tmp_path: Path) -> None:
+    async def run() -> dict[str, Any]:
+        (tmp_path / ".env").write_text(
+            "OPENAI_API_KEY=sk-main-secret\nOPENAI_BASE_URL=https://llm.example.com/v1\nOPENAI_MODEL=gpt-test\n",
+            encoding="utf-8",
+        )
+        image_analysis_dir = tmp_path / "skills" / "image-analysis"
+        image_analysis_dir.mkdir(parents=True, exist_ok=True)
+        (image_analysis_dir / "config.json").write_text(
+            json.dumps(
+                {
+                    "api_key": "sk-vision-secret",
+                    "base_url": "https://vision.example.com/v1",
+                    "model": "vision-test",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        image_generation_dir = tmp_path / "skills" / "image-generation"
+        image_generation_dir.mkdir(parents=True, exist_ok=True)
+        (image_generation_dir / "config.json").write_text(
+            json.dumps(
+                {
+                    "api_key": "sk-image-secret",
+                    "base_url": "https://image.example.com/v1",
+                    "model": "image-test",
+                    "size": "1024x1024",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        async with make_client(tmp_path) as client:
+            response = await client.get("/api/settings")
+            assert response.status_code == 200
+            return cast(dict[str, Any], response.json())
+
+    payload = asyncio.run(run())
+    assert payload["llm"]["base_url"] == "https://llm.example.com/v1"
+    assert payload["llm"]["model"] == "gpt-test"
+    assert payload["llm"]["api_key"] == "sk-main-secret"
+    assert payload["llm"]["api_key_configured"] is True
+    assert payload["llm"]["api_key_masked"]
+    assert payload["image_analysis"]["base_url"] == "https://vision.example.com/v1"
+    assert payload["image_analysis"]["api_key"] == "sk-vision-secret"
+    assert payload["image_generation"]["model"] == "image-test"
+    assert payload["image_generation"]["api_key"] == "sk-image-secret"
+
+
+def test_update_llm_settings_writes_env_and_refreshes_runtime(tmp_path: Path) -> None:
+    async def run() -> tuple[dict[str, Any], AgentRuntime]:
+        (tmp_path / ".env").write_text(
+            "OPENAI_API_KEY=sk-old-secret\nOPENAI_BASE_URL=https://old.example.com/v1\nOPENAI_MODEL=gpt-old\nOTHER_KEY=keep-me\n",
+            encoding="utf-8",
+        )
+        runtime = AgentRuntime(
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            model_client=None,
+        )
+        app = create_app(
+            runtime=runtime,
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            allowed_origins=["http://127.0.0.1:5173"],
+            trace_mode="off",
+        )
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.put(
+                "/api/settings/llm",
+                json={
+                    "base_url": "https://new.example.com/v1",
+                    "model": "gpt-new",
+                },
+            )
+            assert response.status_code == 200
+            return cast(dict[str, Any], response.json()), runtime
+
+    payload, runtime = asyncio.run(run())
+    env_content = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "OPENAI_BASE_URL=https://new.example.com/v1" in env_content
+    assert "OPENAI_MODEL=gpt-new" in env_content
+    assert "OPENAI_API_KEY=sk-old-secret" in env_content
+    assert "OTHER_KEY=keep-me" in env_content
+    assert payload["base_url"] == "https://new.example.com/v1"
+    assert payload["model"] == "gpt-new"
+    assert runtime.provider_config is not None
+    assert runtime.provider_config.base_url == "https://new.example.com/v1"
+    assert runtime.provider_config.model == "gpt-new"
+    assert runtime.model_client is not None
+
+
+def test_update_image_generation_settings_writes_skill_config(tmp_path: Path) -> None:
+    async def run() -> dict[str, Any]:
+        config_path = tmp_path / "skills" / "image-generation" / "config.json"
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(
+            json.dumps(
+                {
+                    "api_key": "sk-image-old",
+                    "base_url": "https://old-image.example.com/v1",
+                    "model": "old-image-model",
+                    "size": "1024x1024",
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        async with make_client(tmp_path) as client:
+            response = await client.put(
+                "/api/settings/image-generation",
+                json={
+                    "base_url": "https://new-image.example.com/v1",
+                    "model": "new-image-model",
+                    "api_key": "sk-image-new",
+                },
+            )
+            assert response.status_code == 200
+            return cast(dict[str, Any], response.json())
+
+    payload = asyncio.run(run())
+    config = json.loads(
+        (tmp_path / "skills" / "image-generation" / "config.json").read_text(encoding="utf-8")
+    )
+    assert config["base_url"] == "https://new-image.example.com/v1"
+    assert config["model"] == "new-image-model"
+    assert config["api_key"] == "sk-image-new"
+    assert config["size"] == "1024x1024"
+    assert payload["api_key_configured"] is True
+
+
+def test_test_llm_settings_uses_saved_api_key_when_request_omits_it(tmp_path: Path) -> None:
+    async def run() -> None:
+        (tmp_path / ".env").write_text(
+            "OPENAI_API_KEY=sk-saved-secret\nOPENAI_BASE_URL=https://saved.example.com/v1\nOPENAI_MODEL=gpt-saved\n",
+            encoding="utf-8",
+        )
+        runtime = AgentRuntime(
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            model_client=StubModelClient(),
+        )
+        app = create_app(
+            runtime=runtime,
+            project_root=tmp_path,
+            data_root=tmp_path / "data",
+            allowed_origins=["http://127.0.0.1:5173"],
+            trace_mode="off",
+        )
+        captured: dict[str, str] = {}
+
+        def fake_test_llm_connection(*, base_url: str, model: str, api_key: str) -> None:
+            captured["base_url"] = base_url
+            captured["model"] = model
+            captured["api_key"] = api_key
+
+        app.state.backend_service._test_llm_connection = fake_test_llm_connection  # type: ignore[attr-defined]
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://testserver") as client:
+            response = await client.post(
+                "/api/settings/llm/test",
+                json={
+                    "base_url": "https://trial.example.com/v1",
+                    "model": "gpt-trial",
+                },
+            )
+            assert response.status_code == 200
+
+        assert captured == {
+            "base_url": "https://trial.example.com/v1",
+            "model": "gpt-trial",
+            "api_key": "sk-saved-secret",
+        }
+
+    asyncio.run(run())
 
 
 def test_run_returns_messages_and_filters_tool_messages(tmp_path: Path) -> None:

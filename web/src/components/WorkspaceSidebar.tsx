@@ -7,7 +7,7 @@ import { Button } from "./ui/Button";
 const navigationItems = [
   { id: "new-topic", label: "新话题", icon: MessageSquarePlus, to: "/" },
   { id: "skills", label: "Skills", icon: Sparkles, to: "/skills" },
-  { id: "settings", label: "设置", icon: Settings }
+  { id: "settings", label: "设置", icon: Settings, to: "/settings" }
 ];
 
 export function WorkspaceSidebar({
@@ -75,7 +75,9 @@ export function WorkspaceSidebar({
               ? location.pathname === "/" || location.pathname === "/topics"
               : item.id === "skills"
                 ? location.pathname === "/skills"
-                : false;
+                : item.id === "settings"
+                  ? location.pathname === "/settings"
+                  : false;
           const classes = cn(
             "grid w-full grid-cols-[44px_minmax(0,1fr)] items-center rounded-2xl text-left text-sm transition-colors duration-300",
             "h-11",

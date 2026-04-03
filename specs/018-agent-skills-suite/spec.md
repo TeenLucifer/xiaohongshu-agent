@@ -14,8 +14,10 @@
   - 写入 `copy_draft.json`
 - `image-analysis`
   - 读取图片分析 skill 自己的 `config.json`
+  - 可由设置页统一管理 `base_url / api_key / model`
 - `image-generation`
   - 读取图片生成 skill 自己的 `config.json`
+  - 可由设置页统一管理 `base_url / api_key / model`
 - `selection-polish`
   - 读取整篇文案上下文，但只返回选区替换文本
 

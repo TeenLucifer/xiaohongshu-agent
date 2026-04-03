@@ -51,6 +51,8 @@
   - 首页“新话题”入口、历史话题次入口与左侧“新话题”导航
 - `006-skills-page`
   - Skills 独立页、skills 列表与技能详情弹窗
+- `029-settings-page`
+  - 设置页、主 LLM 与图片类 skill 配置管理
 - `001-topic-workspace`
   - 话题工作台整体结构
   - 左侧导航与 workspace-first 主工作区

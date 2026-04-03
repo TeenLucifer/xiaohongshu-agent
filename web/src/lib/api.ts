@@ -138,6 +138,7 @@ export interface TopicListItemApiResponse {
   description: string;
   session_id: string;
   updated_at: string;
+  preview_image_url?: string | null;
 }
 
 export interface TopicListApiResponse {
@@ -168,6 +169,31 @@ export interface SkillListItemApiResponse {
 
 export interface SkillsListApiResponse {
   items: SkillListItemApiResponse[];
+}
+
+export interface ProviderSettingsApiResponse {
+  base_url: string;
+  model: string;
+  api_key: string;
+  api_key_configured: boolean;
+  api_key_masked?: string | null;
+}
+
+export interface SettingsApiResponse {
+  llm: ProviderSettingsApiResponse;
+  image_analysis: ProviderSettingsApiResponse;
+  image_generation: ProviderSettingsApiResponse;
+}
+
+export interface UpdateProviderSettingsPayload {
+  baseUrl: string;
+  model: string;
+  apiKey?: string | null;
+}
+
+export interface TestProviderSettingsApiResponse {
+  success: boolean;
+  message: string;
 }
 
 interface ErrorApiResponse {
@@ -239,11 +265,94 @@ export function toTopicCards(items: TopicListItemApiResponse[]): TopicCard[] {
     title: item.title,
     description: item.description ?? "",
     updatedAt: item.updated_at,
+    previewImageUrl: item.preview_image_url ? toAbsoluteApiUrl(item.preview_image_url) : undefined,
   }));
 }
 
 export async function listTopics(): Promise<TopicListApiResponse> {
   return requestJson<TopicListApiResponse>("/api/topics");
+}
+
+export async function getSettings(): Promise<SettingsApiResponse> {
+  return requestJson<SettingsApiResponse>("/api/settings");
+}
+
+export async function updateLlmSettings(
+  payload: UpdateProviderSettingsPayload
+): Promise<ProviderSettingsApiResponse> {
+  return requestJson<ProviderSettingsApiResponse>("/api/settings/llm", {
+    method: "PUT",
+    body: JSON.stringify({
+      base_url: payload.baseUrl,
+      model: payload.model,
+      api_key: payload.apiKey,
+    }),
+  });
+}
+
+export async function updateImageAnalysisSettings(
+  payload: UpdateProviderSettingsPayload
+): Promise<ProviderSettingsApiResponse> {
+  return requestJson<ProviderSettingsApiResponse>("/api/settings/image-analysis", {
+    method: "PUT",
+    body: JSON.stringify({
+      base_url: payload.baseUrl,
+      model: payload.model,
+      api_key: payload.apiKey,
+    }),
+  });
+}
+
+export async function updateImageGenerationSettings(
+  payload: UpdateProviderSettingsPayload
+): Promise<ProviderSettingsApiResponse> {
+  return requestJson<ProviderSettingsApiResponse>("/api/settings/image-generation", {
+    method: "PUT",
+    body: JSON.stringify({
+      base_url: payload.baseUrl,
+      model: payload.model,
+      api_key: payload.apiKey,
+    }),
+  });
+}
+
+export async function testLlmSettings(
+  payload: UpdateProviderSettingsPayload
+): Promise<TestProviderSettingsApiResponse> {
+  return requestJson<TestProviderSettingsApiResponse>("/api/settings/llm/test", {
+    method: "POST",
+    body: JSON.stringify({
+      base_url: payload.baseUrl,
+      model: payload.model,
+      api_key: payload.apiKey ?? "",
+    }),
+  });
+}
+
+export async function testImageAnalysisSettings(
+  payload: UpdateProviderSettingsPayload
+): Promise<TestProviderSettingsApiResponse> {
+  return requestJson<TestProviderSettingsApiResponse>("/api/settings/image-analysis/test", {
+    method: "POST",
+    body: JSON.stringify({
+      base_url: payload.baseUrl,
+      model: payload.model,
+      api_key: payload.apiKey ?? "",
+    }),
+  });
+}
+
+export async function testImageGenerationSettings(
+  payload: UpdateProviderSettingsPayload
+): Promise<TestProviderSettingsApiResponse> {
+  return requestJson<TestProviderSettingsApiResponse>("/api/settings/image-generation/test", {
+    method: "POST",
+    body: JSON.stringify({
+      base_url: payload.baseUrl,
+      model: payload.model,
+      api_key: payload.apiKey ?? "",
+    }),
+  });
 }
 
 export function toSkills(items: SkillListItemApiResponse[]): SkillListItem[] {

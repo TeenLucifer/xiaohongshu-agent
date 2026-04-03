@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import base64
 import mimetypes
 import os
-import base64
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -28,8 +28,10 @@ from backend.schemas import (
     PolishCopyDraftSelectionRequestBody,
     ResetRequestBody,
     RunRequestBody,
+    TestProviderSettingsRequestBody,
     UpdateCopyDraftRequestBody,
     UpdateEditorImagesRequestBody,
+    UpdateProviderSettingsRequestBody,
 )
 from backend.service import BackendApiError, BackendAppService
 from backend.topic_meta_store import TopicMetaStore
@@ -103,6 +105,76 @@ def create_app(
     @app.get("/api/skills")
     async def list_skills(request: Request) -> Any:
         return request.app.state.backend_service.list_skills()
+
+    @app.get("/api/settings")
+    async def get_settings(request: Request) -> Any:
+        return request.app.state.backend_service.get_settings()
+
+    @app.put("/api/settings/llm")
+    async def update_llm_settings(
+        request: Request,
+        payload: UpdateProviderSettingsRequestBody,
+    ) -> Any:
+        return request.app.state.backend_service.update_llm_settings(
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key=payload.api_key,
+        )
+
+    @app.put("/api/settings/image-analysis")
+    async def update_image_analysis_settings(
+        request: Request,
+        payload: UpdateProviderSettingsRequestBody,
+    ) -> Any:
+        return request.app.state.backend_service.update_image_analysis_settings(
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key=payload.api_key,
+        )
+
+    @app.put("/api/settings/image-generation")
+    async def update_image_generation_settings(
+        request: Request,
+        payload: UpdateProviderSettingsRequestBody,
+    ) -> Any:
+        return request.app.state.backend_service.update_image_generation_settings(
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key=payload.api_key,
+        )
+
+    @app.post("/api/settings/llm/test")
+    async def test_llm_settings(
+        request: Request,
+        payload: TestProviderSettingsRequestBody,
+    ) -> Any:
+        return request.app.state.backend_service.test_llm_settings(
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key=payload.api_key,
+        )
+
+    @app.post("/api/settings/image-analysis/test")
+    async def test_image_analysis_settings(
+        request: Request,
+        payload: TestProviderSettingsRequestBody,
+    ) -> Any:
+        return request.app.state.backend_service.test_image_analysis_settings(
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key=payload.api_key,
+        )
+
+    @app.post("/api/settings/image-generation/test")
+    async def test_image_generation_settings(
+        request: Request,
+        payload: TestProviderSettingsRequestBody,
+    ) -> Any:
+        return request.app.state.backend_service.test_image_generation_settings(
+            base_url=payload.base_url,
+            model=payload.model,
+            api_key=payload.api_key,
+        )
 
     @app.post("/api/topics")
     async def create_topic(

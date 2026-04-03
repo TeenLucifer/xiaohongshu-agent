@@ -11,6 +11,7 @@
 - 非流式 chat completion
 - tool calling
 - 基础环境变量配置
+- 主 LLM 配置可由设置页写回 `.env` 并即时热更新
 
 ## 目标
 

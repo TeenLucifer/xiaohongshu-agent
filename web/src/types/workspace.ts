@@ -13,6 +13,7 @@ export interface TopicCard {
   title: string;
   description: string;
   updatedAt: string;
+  previewImageUrl?: string;
 }
 
 export interface WorkspaceSection {

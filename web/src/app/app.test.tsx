@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { AppRoutes } from "./routes";
@@ -32,7 +32,9 @@ describe("topic workspace feature", () => {
     await waitForTopicList();
 
     expect(screen.getByRole("heading", { name: "新话题", level: 1 })).toBeInTheDocument();
+    expect(screen.getByLabelText("话题标题").tagName).toBe("INPUT");
     expect(screen.getAllByText("春季通勤穿搭").length).toBeGreaterThan(0);
+    expect(screen.getByTestId("recent-topics-rail")).toBeInTheDocument();
     expect(screen.getByTestId("workspace-sidebar")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "新话题" })).toBeInTheDocument();
   });
@@ -103,7 +105,7 @@ describe("topic workspace feature", () => {
     expect(screen.getByRole("button", { name: "展开侧边栏" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "新话题" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Skills" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "设置" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "展开侧边栏" }));
 
@@ -173,5 +175,77 @@ describe("topic workspace feature", () => {
     await user.click(screen.getByRole("link", { name: "新话题" }));
 
     expect(await screen.findByRole("heading", { name: "新话题", level: 1 })).toBeInTheDocument();
+  });
+
+  it("opens the settings page from the sidebar", async () => {
+    const user = userEvent.setup();
+    renderWithRoute("/topics/topic-spring-commute");
+
+    await waitForWorkspace();
+
+    await user.click(screen.getByRole("link", { name: "设置" }));
+
+    expect(await screen.findByTestId("settings-shell")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "设置", level: 1 })).toBeInTheDocument();
+    expect(screen.getByTestId("settings-tabs")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "主 LLM" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "图片识别" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "图片生成" })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("heading", { name: "主 LLM", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "图片识别", level: 2 })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "图片生成", level: 2 })).not.toBeInTheDocument();
+  });
+
+  it("saves and tests provider settings on the settings page", async () => {
+    const user = userEvent.setup();
+    renderWithRoute("/settings");
+
+    expect(await screen.findByTestId("settings-shell")).toBeInTheDocument();
+    const llmCard = screen.getByTestId("settings-card-主 LLM");
+    const baseUrlInput = within(llmCard).getByDisplayValue("https://api.openai.com/v1");
+
+    await user.clear(baseUrlInput);
+    await user.type(baseUrlInput, "https://llm.changed.test/v1");
+    await user.click(within(llmCard).getByRole("button", { name: "保存" }));
+
+    expect(await within(llmCard).findByText("保存成功，后续调用将使用新配置。")).toBeInTheDocument();
+
+    await user.click(within(llmCard).getByRole("button", { name: "测试" }));
+
+    expect(await within(llmCard).findByText("主 LLM 连接成功。")).toBeInTheDocument();
+  });
+
+  it("switches between settings tabs and shows a single active panel", async () => {
+    const user = userEvent.setup();
+    renderWithRoute("/settings");
+
+    expect(await screen.findByTestId("settings-shell")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "主 LLM", level: 2 })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "图片生成" }));
+
+    expect(screen.getByRole("button", { name: "图片生成" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("heading", { name: "主 LLM", level: 2 })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "图片生成", level: 2 })).toBeInTheDocument();
+    expect(screen.queryByTestId("settings-card-主 LLM")).not.toBeInTheDocument();
+    expect(screen.getByTestId("settings-card-图片生成")).toBeInTheDocument();
+  });
+
+  it("reveals the configured api key after clicking the visibility toggle", async () => {
+    const user = userEvent.setup();
+    renderWithRoute("/settings");
+
+    expect(await screen.findByTestId("settings-shell")).toBeInTheDocument();
+
+    const llmCard = screen.getByTestId("settings-card-主 LLM");
+    const apiKeyInput = within(llmCard).getByLabelText("API Key", { selector: "input" });
+
+    expect(apiKeyInput).toHaveAttribute("type", "text");
+    expect(apiKeyInput).toHaveValue("***************");
+
+    await user.click(within(llmCard).getByRole("button", { name: "显示 API Key" }));
+
+    expect(apiKeyInput).toHaveAttribute("type", "text");
+    expect(apiKeyInput).toHaveValue("sk-llm-test-key");
   });
 });

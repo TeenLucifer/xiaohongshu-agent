@@ -263,6 +263,47 @@ class ErrorResponse(BaseModel):
     details: dict[str, Any] | None = None
 
 
+class ProviderSettingsResponse(BaseModel):
+    """Provider configuration for local settings page."""
+
+    base_url: str
+    model: str
+    api_key: str = ""
+    api_key_configured: bool
+    api_key_masked: str | None = None
+
+
+class SettingsResponse(BaseModel):
+    """Settings payload for frontend settings page."""
+
+    llm: ProviderSettingsResponse
+    image_analysis: ProviderSettingsResponse
+    image_generation: ProviderSettingsResponse
+
+
+class UpdateProviderSettingsRequestBody(BaseModel):
+    """Request body for updating one provider card."""
+
+    base_url: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    api_key: str | None = None
+
+
+class TestProviderSettingsRequestBody(BaseModel):
+    """Request body for testing one provider card."""
+
+    base_url: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    api_key: str | None = None
+
+
+class TestProviderSettingsResponse(BaseModel):
+    """Minimal connection test result."""
+
+    success: bool
+    message: str
+
+
 class TopicListItemResponse(BaseModel):
     """Minimal topic card DTO for topic list and sidebar."""
 
@@ -271,6 +312,7 @@ class TopicListItemResponse(BaseModel):
     description: str = ""
     session_id: str
     updated_at: datetime
+    preview_image_url: str | None = None
 
 
 class TopicListResponse(BaseModel):
