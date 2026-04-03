@@ -1,5 +1,5 @@
-import { X } from "lucide-react";
-import { useCallback, useState } from "react";
+import { ImagePlus, Upload, X } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { cn } from "../lib/cn";
 import type { EditorImage, MaterialImage } from "../types/workspace";
 import { ImageLightbox, type LightboxImage } from "./ImageLightbox";
@@ -8,16 +8,22 @@ interface ImageEditorSectionProps {
   materialImages: MaterialImage[];
   editorImages: EditorImage[];
   onEditorImagesChange: (images: EditorImage[]) => void;
+  onDeleteUploadedImage: (materialId: string) => void | Promise<void>;
+  onUploadImages: (files: File[]) => void | Promise<void>;
 }
 
 export function ImageEditorSection({
   materialImages,
   editorImages,
   onEditorImagesChange,
+  onDeleteUploadedImage,
+  onUploadImages,
 }: ImageEditorSectionProps): JSX.Element {
   const [dragOverEditor, setDragOverEditor] = useState(false);
+  const [dragOverUpload, setDragOverUpload] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<LightboxImage[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 处理拖拽开始
   const handleDragStart = useCallback(
@@ -39,6 +45,35 @@ export function ImageEditorSection({
   const handleDragLeave = useCallback(() => {
     setDragOverEditor(false);
   }, []);
+
+  const handleFilesSelected = useCallback(
+    (files: FileList | File[] | null) => {
+      if (files === null || files.length === 0) {
+        return;
+      }
+      void onUploadImages(Array.from(files));
+    },
+    [onUploadImages]
+  );
+
+  const handleUploadCardDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setDragOverUpload(true);
+  }, []);
+
+  const handleUploadCardDragLeave = useCallback(() => {
+    setDragOverUpload(false);
+  }, []);
+
+  const handleUploadCardDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      setDragOverUpload(false);
+      handleFilesSelected(event.dataTransfer.files);
+    },
+    [handleFilesSelected]
+  );
 
   // 处理放置
   const handleDrop = useCallback(
@@ -77,9 +112,9 @@ export function ImageEditorSection({
             imagePath: image.imagePath,
             alt: image.alt,
           };
-        } else if ("postId" in image) {
+        } else if ("sourceImageId" in image) {
           const alreadyExists = editorImages.some(
-            (item) => item.sourceType === "material" && item.sourceImageId === image.id
+            (item) => item.sourceType === "material" && item.sourceImageId === image.sourceImageId
           );
           if (alreadyExists) {
             return;
@@ -88,8 +123,8 @@ export function ImageEditorSection({
             id: nextId,
             order: editorImages.length + 1,
             sourceType: "material",
-            sourcePostId: image.postId,
-            sourceImageId: image.id,
+            sourcePostId: image.sourcePostId,
+            sourceImageId: image.sourceImageId,
             imageUrl: image.imageUrl,
             imagePath: image.imagePath,
             alt: image.alt,
@@ -137,12 +172,25 @@ export function ImageEditorSection({
         {/* 素材区 */}
         <div>
           <p className="mb-2 text-xs font-medium text-slate-500">素材图片 ({materialImages.length})</p>
-          {materialImages.length === 0 ? (
-            <p className="text-xs text-slate-400">搜索帖子后，图片会出现在这里</p>
-          ) : (
-            <div className="max-h-[200px] overflow-y-auto rounded-lg bg-slate-50 p-2">
-              <div className="flex flex-wrap gap-2">
-                {materialImages.map((image, index) => (
+          <div className="max-h-[200px] overflow-y-auto rounded-lg bg-slate-50 p-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                className={cn(
+                  "flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-lg border border-dashed bg-white text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700",
+                  dragOverUpload ? "border-blue-400 bg-blue-50 text-blue-600" : "border-slate-200"
+                )}
+                onClick={() => fileInputRef.current?.click()}
+                onDragLeave={handleUploadCardDragLeave}
+                onDragOver={handleUploadCardDragOver}
+                onDrop={handleUploadCardDrop}
+                type="button"
+              >
+                <ImagePlus className="h-4 w-4" strokeWidth={1.8} />
+                <span className="mt-1 text-[10px] font-medium">上传图片</span>
+              </button>
+              {materialImages.map((image, index) => {
+                const isUploadedImage = image.sourcePostId === undefined;
+                return (
                   <div
                     className="group relative h-16 w-16 cursor-grab overflow-hidden rounded-lg border border-slate-200 bg-white"
                     draggable
@@ -164,14 +212,41 @@ export function ImageEditorSection({
                       draggable={false}
                       src={image.imageUrl}
                     />
+                    {isUploadedImage ? (
+                      <button
+                        aria-label={`删除${image.alt}`}
+                        className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-slate-900/60 text-white opacity-0 transition-opacity hover:bg-slate-900 group-hover:opacity-100"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void onDeleteUploadedImage(image.id);
+                        }}
+                        type="button"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    ) : null}
                     <div className="absolute bottom-0 left-0 right-0 bg-slate-900/60 px-1 py-0.5 text-[8px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-                      {image.postTitle.slice(0, 8)}...
+                      {image.label.slice(0, 8)}...
                     </div>
                   </div>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
+            {materialImages.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-400">上传本地图片或先搜索帖子，候选图会出现在这里</p>
+            ) : null}
+          </div>
+          <input
+            accept="image/*"
+            className="hidden"
+            multiple
+            onChange={(event) => {
+              handleFilesSelected(event.target.files);
+              event.target.value = "";
+            }}
+            ref={fileInputRef}
+            type="file"
+          />
         </div>
 
         {/* 编辑区 */}

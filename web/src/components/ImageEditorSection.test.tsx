@@ -7,16 +7,18 @@ import type { EditorImage, MaterialImage } from "../types/workspace";
 const materialImages: MaterialImage[] = [
   {
     id: "material-1",
-    postId: "post-1",
-    postTitle: "测试帖子 1",
+    sourceImageId: "material-1",
+    sourcePostId: "post-1",
+    label: "测试帖子 1",
     imageUrl: "https://example.com/material-1.png",
     imagePath: "posts/post-1/assets/image-01.png",
     alt: "素材图 1",
   },
   {
     id: "material-2",
-    postId: "post-2",
-    postTitle: "测试帖子 2",
+    sourceImageId: "material-2",
+    sourcePostId: "post-2",
+    label: "测试帖子 2",
     imageUrl: "https://example.com/material-2.png",
     imagePath: "posts/post-2/assets/image-01.png",
     alt: "素材图 2",
@@ -40,12 +42,16 @@ describe("ImageEditorSection", () => {
   it("opens preview for material and editor images, and delete button does not open preview", async () => {
     const user = userEvent.setup();
     const onEditorImagesChange = vi.fn();
+    const onUploadImages = vi.fn();
+    const onDeleteUploadedImage = vi.fn();
 
     render(
       <ImageEditorSection
         editorImages={editorImages}
         materialImages={materialImages}
+        onDeleteUploadedImage={onDeleteUploadedImage}
         onEditorImagesChange={onEditorImagesChange}
+        onUploadImages={onUploadImages}
       />
     );
 
@@ -77,12 +83,16 @@ describe("ImageEditorSection", () => {
 
   it("accepts generated-image drag payload and appends it into editor area", () => {
     const onEditorImagesChange = vi.fn();
+    const onUploadImages = vi.fn();
+    const onDeleteUploadedImage = vi.fn();
 
     render(
       <ImageEditorSection
         editorImages={editorImages}
         materialImages={materialImages}
+        onDeleteUploadedImage={onDeleteUploadedImage}
         onEditorImagesChange={onEditorImagesChange}
+        onUploadImages={onUploadImages}
       />
     );
 
@@ -119,12 +129,16 @@ describe("ImageEditorSection", () => {
 
   it("does not append duplicate material image into editor area", () => {
     const onEditorImagesChange = vi.fn();
+    const onUploadImages = vi.fn();
+    const onDeleteUploadedImage = vi.fn();
 
     render(
       <ImageEditorSection
         editorImages={editorImages}
         materialImages={materialImages}
+        onDeleteUploadedImage={onDeleteUploadedImage}
         onEditorImagesChange={onEditorImagesChange}
+        onUploadImages={onUploadImages}
       />
     );
 
@@ -144,6 +158,8 @@ describe("ImageEditorSection", () => {
 
   it("does not append duplicate generated image into editor area", () => {
     const onEditorImagesChange = vi.fn();
+    const onUploadImages = vi.fn();
+    const onDeleteUploadedImage = vi.fn();
 
     render(
       <ImageEditorSection
@@ -160,7 +176,9 @@ describe("ImageEditorSection", () => {
           },
         ]}
         materialImages={materialImages}
+        onDeleteUploadedImage={onDeleteUploadedImage}
         onEditorImagesChange={onEditorImagesChange}
+        onUploadImages={onUploadImages}
       />
     );
 
@@ -183,5 +201,73 @@ describe("ImageEditorSection", () => {
     });
 
     expect(onEditorImagesChange).not.toHaveBeenCalled();
+  });
+
+  it("supports uploading local images from the candidate area", async () => {
+    const user = userEvent.setup();
+    const onEditorImagesChange = vi.fn();
+    const onUploadImages = vi.fn();
+    const onDeleteUploadedImage = vi.fn();
+
+    render(
+      <ImageEditorSection
+        editorImages={editorImages}
+        materialImages={materialImages}
+        onDeleteUploadedImage={onDeleteUploadedImage}
+        onEditorImagesChange={onEditorImagesChange}
+        onUploadImages={onUploadImages}
+      />
+    );
+
+    const file = new File(["mock-image"], "reference.png", { type: "image/png" });
+    const input = document.querySelector("input[type='file']");
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error("file input not found");
+    }
+
+    await user.upload(input, file);
+
+    expect(onUploadImages).toHaveBeenCalledWith([file]);
+  });
+
+  it("allows deleting uploaded images but not post images", async () => {
+    const user = userEvent.setup();
+    const onEditorImagesChange = vi.fn();
+    const onUploadImages = vi.fn();
+    const onDeleteUploadedImage = vi.fn();
+    const uploadedImages: MaterialImage[] = [
+      {
+        id: "material-upload-1",
+        sourceImageId: "material-upload-1",
+        label: "上传素材",
+        imageUrl: "https://example.com/upload-1.png",
+        imagePath: "materials/upload-1.png",
+        alt: "上传素材",
+      },
+      ...materialImages,
+    ];
+
+    render(
+      <ImageEditorSection
+        editorImages={editorImages}
+        materialImages={uploadedImages}
+        onDeleteUploadedImage={onDeleteUploadedImage}
+        onEditorImagesChange={onEditorImagesChange}
+        onUploadImages={onUploadImages}
+      />
+    );
+
+    const uploadedCard = screen.getByRole("img", { name: "上传素材" }).closest("[role='button']");
+    if (!(uploadedCard instanceof HTMLElement)) {
+      throw new Error("uploaded card not found");
+    }
+    await user.click(within(uploadedCard).getByRole("button", { name: "删除上传素材" }));
+    expect(onDeleteUploadedImage).toHaveBeenCalledWith("material-upload-1");
+
+    const postCard = screen.getByRole("img", { name: "素材图 1" }).closest("[role='button']");
+    if (!(postCard instanceof HTMLElement)) {
+      throw new Error("post card not found");
+    }
+    expect(within(postCard).queryByRole("button")).not.toBeInTheDocument();
   });
 });

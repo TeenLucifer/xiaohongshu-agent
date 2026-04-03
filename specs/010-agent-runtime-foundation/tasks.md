@@ -12,6 +12,7 @@
 - [x] 完成 provider 骨架接入，支持最小 OpenAI-compatible 非流式 + tool calling 模式。
 - [x] 建立统一错误边界与最小结果模型，供后续 session、memory、loop、tools、skills 复用。
 - [x] 引入统一时间入口，固定 `Asia/Shanghai` 为默认时间来源并接入相关子系统。
+- [x] 将 runtime prompt 收口为单一 YAML 中的 `system/user` 模板，并收口为“固定正文 + 少量动态 block/字段注入”。
 
 ## 当前待办
 

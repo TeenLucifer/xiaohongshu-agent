@@ -71,6 +71,7 @@ describe("conversation timeline feature", () => {
     await renderWorkspace();
 
     const composer = screen.getByLabelText("对话输入框");
+    expect(composer.tagName).toBe("TEXTAREA");
     await user.type(composer, "继续给我两版标题");
     await user.click(screen.getByRole("button", { name: "发送消息" }));
 

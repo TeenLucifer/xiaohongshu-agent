@@ -432,64 +432,52 @@ export function CopyDraftSummaryPanel({
   );
 
   return (
-    <article className="rounded-[20px] bg-slate-50 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">当前文案</p>
+    <article>
+      <div className="mb-3 flex items-center justify-between gap-3">
         <span className="text-[11px] text-slate-400">{isSaving ? "保存中..." : "已自动保存"}</span>
+        <span className="text-[11px] text-slate-400">选中文本后可 AI 润色</span>
       </div>
 
-      <div className="mt-4 rounded-[24px] border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <div>
-            <p className="text-xs font-medium text-slate-500">Markdown 文案</p>
-            <p className="mt-1 text-[11px] text-slate-400">
-              输入 <code>#</code>、<code>##</code>、<code>-</code>、<code>&gt;</code> 等语法后会立即格式化
-            </p>
-          </div>
-          <span className="text-[11px] text-slate-400">选中文本后可 AI 润色</span>
-        </div>
-
-        <div className="relative px-4 py-4">
-          <LexicalComposer initialConfig={initialConfig}>
-            <ListPlugin />
-            <LinkPlugin />
-            <HistoryPlugin />
-            <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
-            <SyncMarkdownPlugin markdown={documentMarkdown} />
-            <AutoScrollSelectionPlugin />
-            <SelectionPolishPlugin onPolishSelection={onPolishSelection} />
-            <OnChangePlugin
-              ignoreHistoryMergeTagChange
-              ignoreSelectionChange
-              onChange={(editorState) => {
-                const markdown = editorState.read(() => $convertToMarkdownString(TRANSFORMERS));
-                const nextDraft = splitDocumentMarkdown(markdown);
-                if (nextDraft.title === copyDraft.title && nextDraft.body === copyDraft.body) {
-                  return;
-                }
-                onChange(nextDraft);
-              }}
-            />
-            <RichTextPlugin
-              ErrorBoundary={LexicalErrorBoundary}
-              contentEditable={
-                <ContentEditable
-                  aria-label="文案正文编辑器"
-                  className="max-h-[520px] min-h-[360px] overflow-y-auto rounded-[20px] bg-white px-2 py-1 pr-3 text-[15px] leading-8 text-slate-800 outline-none"
-                />
+      <div className="relative">
+        <LexicalComposer initialConfig={initialConfig}>
+          <ListPlugin />
+          <LinkPlugin />
+          <HistoryPlugin />
+          <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+          <SyncMarkdownPlugin markdown={documentMarkdown} />
+          <AutoScrollSelectionPlugin />
+          <SelectionPolishPlugin onPolishSelection={onPolishSelection} />
+          <OnChangePlugin
+            ignoreHistoryMergeTagChange
+            ignoreSelectionChange
+            onChange={(editorState) => {
+              const markdown = editorState.read(() => $convertToMarkdownString(TRANSFORMERS));
+              const nextDraft = splitDocumentMarkdown(markdown);
+              if (nextDraft.title === copyDraft.title && nextDraft.body === copyDraft.body) {
+                return;
               }
-              placeholder={
-                <div className="pointer-events-none absolute left-6 top-5 text-[15px] leading-8 text-slate-400">
-                  输入文案内容，例如：
-                  <br />
-                  # 通勤穿搭别再乱买了
-                  <br />
-                  ## 通勤穿搭公式
-                </div>
-              }
-            />
-          </LexicalComposer>
-        </div>
+              onChange(nextDraft);
+            }}
+          />
+          <RichTextPlugin
+            ErrorBoundary={LexicalErrorBoundary}
+            contentEditable={
+              <ContentEditable
+                aria-label="文案正文编辑器"
+                className="max-h-[560px] min-h-[380px] overflow-y-auto bg-transparent px-1 py-1 pr-3 text-[15px] leading-8 text-slate-800 outline-none"
+              />
+            }
+            placeholder={
+              <div className="pointer-events-none absolute left-1 top-2 text-[15px] leading-8 text-slate-400">
+                输入文案内容，例如：
+                <br />
+                # 通勤穿搭别再乱买了
+                <br />
+                ## 通勤穿搭公式
+              </div>
+            }
+          />
+        </LexicalComposer>
       </div>
     </article>
   );

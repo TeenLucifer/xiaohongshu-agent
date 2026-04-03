@@ -36,8 +36,19 @@ metadata:
 2. 执行：`python scripts/analyze.py --post-id <id> --workspace <root>`
 3. 脚本会：
    - 读取 `<workspace>/posts/<post_id>/assets/` 下的图片
-   - 调用硅基流动视觉 API 分析
+   - 读取当前 skill 目录下的 `config.json`
+   - 调用视觉 API 分析
    - 返回结构化结果
+
+## 配置
+
+- 视觉模型配置只从当前 skill 目录读取：
+  - `skills/image-analysis/config.json`
+- 需要至少提供：
+  - `api_key`
+  - 可选 `base_url`
+  - 可选 `model`
+- 仓库提交 `config.example.json` 作为模板，本地实际密钥不进入 Git
 
 ## 输出结构
 

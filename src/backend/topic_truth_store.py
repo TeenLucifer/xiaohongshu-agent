@@ -15,10 +15,10 @@ from backend.topic_truth_models import (
     CopyDraftRecord,
     EditorImagesDocument,
     ImageResultsRecord,
+    MaterialsDocument,
     PatternSummaryRecord,
     PostDetail,
     RawPostRecord,
-    SelectedPostsDocument,
     TopicMeta,
 )
 
@@ -37,6 +37,7 @@ class SessionWorkspaceStore:
         root = self.get_workspace_root(session_id)
         self.get_posts_root(session_id).mkdir(parents=True, exist_ok=True)
         (root / "generated_images").mkdir(parents=True, exist_ok=True)
+        (root / "materials").mkdir(parents=True, exist_ok=True)
         return root
 
     def clear_workspace(self, session_id: str) -> None:
@@ -53,11 +54,19 @@ class SessionWorkspaceStore:
     def get_generated_images_root(self, session_id: str) -> Path:
         return self.get_workspace_root(session_id) / "generated_images"
 
+    def get_materials_root(self, session_id: str) -> Path:
+        return self.get_workspace_root(session_id) / "materials"
+
     def get_post_root(self, session_id: str, post_id: str) -> Path:
         return self.get_posts_root(session_id) / post_id
 
     def get_post_assets_root(self, session_id: str, post_id: str) -> Path:
         return self.get_post_root(session_id, post_id) / "assets"
+
+    def delete_post(self, session_id: str, post_id: str) -> None:
+        post_root = self.get_post_root(session_id, post_id)
+        if post_root.exists():
+            shutil.rmtree(post_root, ignore_errors=True)
 
     def list_post_ids(self, session_id: str) -> list[str]:
         posts_root = self.get_posts_root(session_id)
@@ -94,18 +103,18 @@ class SessionWorkspaceStore:
         self._write_model(self.get_workspace_root(session_id) / "candidate_posts.json", document)
         return document
 
-    def read_selected_posts(self, session_id: str) -> SelectedPostsDocument | None:
+    def read_materials(self, session_id: str) -> MaterialsDocument | None:
         return self._read_model(
-            self.get_workspace_root(session_id) / "selected_posts.json",
-            SelectedPostsDocument,
+            self.get_workspace_root(session_id) / "materials.json",
+            MaterialsDocument,
         )
 
-    def write_selected_posts(
+    def write_materials(
         self,
         session_id: str,
-        document: SelectedPostsDocument,
-    ) -> SelectedPostsDocument:
-        self._write_model(self.get_workspace_root(session_id) / "selected_posts.json", document)
+        document: MaterialsDocument,
+    ) -> MaterialsDocument:
+        self._write_model(self.get_workspace_root(session_id) / "materials.json", document)
         return document
 
     def read_pattern_summary(self, session_id: str) -> PatternSummaryRecord | None:
@@ -208,6 +217,27 @@ class SessionWorkspaceStore:
         destination = destination_root / (target_name or source_path.name)
         shutil.copy2(source_path, destination)
         return Path("assets") / destination.name
+
+    def copy_material_asset(
+        self,
+        session_id: str,
+        source_path: Path,
+        *,
+        target_name: str | None = None,
+    ) -> Path:
+        destination_root = self.get_materials_root(session_id)
+        destination_root.mkdir(parents=True, exist_ok=True)
+        destination = destination_root / (target_name or source_path.name)
+        shutil.copy2(source_path, destination)
+        return Path("materials") / destination.name
+
+    def delete_material_asset(self, session_id: str, relative_path: str) -> None:
+        candidate = (self.get_workspace_root(session_id) / relative_path).resolve()
+        workspace_root = self.get_workspace_root(session_id).resolve()
+        if workspace_root not in candidate.parents:
+            return
+        if candidate.exists() and candidate.is_file():
+            candidate.unlink(missing_ok=True)
 
     def _read_model(self, path: Path, model_type: type[ModelT]) -> ModelT | None:
         if not path.exists():

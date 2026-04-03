@@ -37,6 +37,31 @@ def test_resolve_selected_editor_images_requires_existing_order() -> None:
         )
 
 
+def test_get_api_config_reads_local_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    config_path = tmp_path / "config.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "api_key": "gemini-key",
+                "base_url": "https://example.com/gemini",
+                "model": "gemini-test",
+                "size": "1536x1024",
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(image_generation, "CONFIG_PATH", config_path)
+
+    assert image_generation.get_api_config() == (
+        "gemini-key",
+        "https://example.com/gemini",
+        "gemini-test",
+        "1536x1024",
+    )
+
+
 def test_load_reference_images_reads_original_files(tmp_path: Path) -> None:
     workspace_root = tmp_path / "workspace"
     image_path = workspace_root / "editor" / "1.png"

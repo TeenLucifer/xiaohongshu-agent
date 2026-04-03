@@ -1,0 +1,6 @@
+{
+  "api_key": "replace-with-your-gemini-image-api-key",
+  "base_url": "https://aihubmix.com/v1",
+  "model": "gemini-2.5-flash-image-preview",
+  "size": "1024x1024"
+}

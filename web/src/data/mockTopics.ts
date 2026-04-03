@@ -6,7 +6,6 @@ import type {
   GeneratedImageResult,
   PatternSummaryContent,
   TopicCard,
-  TopicMaterialPreview,
   TopicWorkspace
 } from "../types/workspace";
 
@@ -55,7 +54,6 @@ export const mockWorkspaces: Record<string, TopicWorkspace> = {
   "topic-spring-commute": {
     topic: mockTopics[0],
     sections: [
-      { id: "materials", title: "素材", status: "success", summary: "已上传 3 份素材。" },
       { id: "collector", title: "搜集", status: "loading", summary: "搜集中，已返回 3 条高相关候选帖子。" },
       { id: "candidatePosts", title: "搜索结果", status: "success", summary: "默认展开，支持详情查看与加入已选。" },
       { id: "patternSummary", title: "总结", status: "success", summary: "模式总结已融入中间对话流。" },
@@ -67,7 +65,6 @@ export const mockWorkspaces: Record<string, TopicWorkspace> = {
   "topic-small-rental": {
     topic: mockTopics[1],
     sections: [
-      { id: "materials", title: "素材", status: "empty", summary: "当前还没有上传素材。" },
       { id: "collector", title: "搜集", status: "empty", summary: "等待开始搜集。" },
       { id: "candidatePosts", title: "搜索结果", status: "empty", summary: "还没有候选帖子。" },
       { id: "patternSummary", title: "总结", status: "empty", summary: "还没有总结结果。" },
@@ -94,9 +91,7 @@ export const mockCandidatePostsByTopicId: Record<string, CandidatePost[]> = {
         "/references/ScreenShot_2026-03-26_201829_887.png",
         createSvgCover("西装细节", "#c0d0ec", "#6f85b5"),
         createSvgCover("搭配公式", "#dfbca6", "#8e5c42")
-      ),
-      selected: true,
-      manualOrder: 1
+      )
     },
     {
       id: "candidate-makeup-outfit",
@@ -111,9 +106,7 @@ export const mockCandidatePostsByTopicId: Record<string, CandidatePost[]> = {
       images: buildCandidateImages(
         createSvgCover("通勤妆容", "#f7b3b7", "#d65978"),
         createSvgCover("妆容步骤", "#f0c2d3", "#c56d90")
-      ),
-      selected: false,
-      manualOrder: null
+      )
     },
     {
       id: "candidate-budget-closet",
@@ -128,9 +121,7 @@ export const mockCandidatePostsByTopicId: Record<string, CandidatePost[]> = {
       images: buildCandidateImages(
         createSvgCover("衣橱整理", "#ffc76e", "#b86d06"),
         createSvgCover("基础单品", "#ffdca7", "#c98727")
-      ),
-      selected: true,
-      manualOrder: 2
+      )
     },
     {
       id: "candidate-cardigan",
@@ -142,19 +133,8 @@ export const mockCandidatePostsByTopicId: Record<string, CandidatePost[]> = {
       heat: "收藏 1.8w · 点赞 9.6k",
       sourceUrl: "https://www.xiaohongshu.com/explore/cardigan-week",
       imageUrl: createSvgCover("薄针织", "#abc6ea", "#5674b8"),
-      images: buildCandidateImages(createSvgCover("薄针织", "#abc6ea", "#5674b8")),
-      selected: false,
-      manualOrder: null
+      images: buildCandidateImages(createSvgCover("薄针织", "#abc6ea", "#5674b8"))
     }
-  ],
-  "topic-small-rental": []
-};
-
-export const mockMaterialPreviewByTopicId: Record<string, TopicMaterialPreview[]> = {
-  "topic-spring-commute": [
-    { id: "material-image-1", type: "image", label: "通勤穿搭灵感图", detail: "用户上传图片 · 2 张" },
-    { id: "material-text-1", type: "text", label: "选题要求", detail: "强调低预算、适合早八、避免过度精致感" },
-    { id: "material-link-1", type: "post_link", label: "参考帖子链接", detail: "只作为搜集方向，不直接进入候选池" }
   ],
   "topic-small-rental": []
 };

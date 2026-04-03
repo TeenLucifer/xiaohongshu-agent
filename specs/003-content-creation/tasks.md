@@ -56,6 +56,6 @@
 - 依赖 `001-topic-workspace` 已完成
 
 - [x] `003-J`：接入真实图片结果展示区
-  由 `025-image-generation-skill` 提供真实 `image_results`，在右侧图片 section 下半部分展示。
+  由 `027-agent-skills-suite` 中的 `image-generation` 提供真实 `image_results`，在右侧图片 section 下半部分展示。
 - [x] `003-K`：支持 final answer 图片缩略图
   中栏最终回复可附带 1 张代表图，和右侧结果区引用同一份图片真相层。

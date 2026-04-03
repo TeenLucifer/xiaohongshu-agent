@@ -153,6 +153,7 @@ always skills 规则：
 - `Current Time`
 - `Session ID`
 - `Workspace Path`
+- `Workspace Data Root`
 
 并明确标记为：
 
@@ -186,13 +187,27 @@ always skills 规则：
 
 ### 静态 prompt 配置边界
 
-- `ContextBuilder` 中的静态提示词文案可以由内部 YAML 配置提供
-- 静态提示词配置只承载固定文案，不承载运行时条件逻辑
-- 动态拼装职责仍保留在 `ContextBuilder`：
-  - memory
-  - always skills
-  - skills summary
-  - runtime context
+- runtime prompt 统一由单个内部 `runtime.yaml` 提供
+- `runtime.yaml` 必须明确区分：
+  - `system` 模板
+  - `user` 模板
+  - memory consolidation prompts
+- 所有静态提示词文案都应记录在 YAML 中，不应散落在 `ContextBuilder` 里硬编码
+- `ContextBuilder` 只负责准备动态字段并填充模板，不再手写大段 prompt 文案
+- 模板应以“固定正文直写”为主，不应把固定标题、固定规则和固定标签继续拆成占位符
+- system prompt 只保留少量动态 block：
+  - `memory_context_block`
+  - `always_skills_block`
+  - `skills_summary_block`
+- user prompt 只保留少量动态 block：
+  - `attachments_block`
+- 其余运行时变化内容按细字段直接注入：
+  - `current_time`
+  - `session_id`
+  - `workspace_path`
+  - `workspace_data_root`
+  - `user_input`
+- system prompt 只保留通用硬约束；业务细流程尽量收回 skill 文档
 
 ### 内部时间入口边界
 

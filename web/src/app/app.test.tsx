@@ -64,7 +64,7 @@ describe("topic workspace feature", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders a workspace-first layout with topic, creation and conversation tabs", async () => {
+  it("renders a workspace-first layout with creation and conversation tabs", async () => {
     const user = userEvent.setup();
     renderWithRoute("/topics/topic-spring-commute");
     await waitForWorkspace();
@@ -74,9 +74,10 @@ describe("topic workspace feature", () => {
     expect(screen.queryByText("Topic Workspace")).not.toBeInTheDocument();
     expect(screen.queryByText("已就绪")).not.toBeInTheDocument();
     expect(screen.queryByText("进行中")).not.toBeInTheDocument();
-    expect(await screen.findByRole("button", { name: "选题" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "创作" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "创作" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: "选题" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "对话" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "展开素材" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("对话输入框")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "对话" }));
@@ -145,7 +146,7 @@ describe("topic workspace feature", () => {
 
     expect(screen.queryByLabelText("对话输入框")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "对话" }));
-    expect(screen.getByLabelText("对话输入框")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("对话输入框").tagName).toBe("TEXTAREA");
     expect(screen.getByRole("button", { name: "发送消息" })).toBeInTheDocument();
     expect(screen.queryByText("查看详细日志")).not.toBeInTheDocument();
   });

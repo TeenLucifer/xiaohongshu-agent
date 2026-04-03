@@ -109,25 +109,15 @@ def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> 
     assert identity_idx < memory_idx < always_skills_idx < skills_summary_idx
     assert "# Bootstrap Files" not in prompt
     assert "AGENTS.md" not in prompt
+    assert "# Identity" in prompt
     assert "你只能在当前允许访问的目录内工作。" in prompt
     assert "查看目录时优先使用 list_dir" in prompt
     assert "执行命令时不要使用 cd、&&、ls、cat" in prompt
     assert "只能通过 exec.working_dir" in prompt
     assert "不要在当前 session workspace 中直接执行" in prompt
     assert "专为小红书调研与内容运营设计的助手 runtime" in prompt
-    assert "应先使用 xhs-explore 搜索" in prompt
-    assert "--note-type 图文" in prompt
-    assert "Top 3 篇图文帖子获取详情" in prompt
-    assert "视频帖子，首版应直接跳过" in prompt
-    assert "xhs-research-ingest" in prompt
-    assert "write_file" in prompt
-    assert "python scripts/cli.py ingest-posts" in prompt
-    assert "正式契约是通用 `posts[] + --posts-dir`" in prompt
-    assert "Workspace Data Root" in prompt
-    assert "--posts-dir <workspace_data_root>/posts" in prompt
-    assert "不要自行拼接或猜测 posts 目录" in prompt
-    assert "帖子包已保存到目标 posts 目录" in prompt
-    assert "只能基于用户已加入 `selected_posts.json` 的帖子" in prompt
+    assert "使用任何 skill 前，应先读取对应的 SKILL.md。" in prompt
+    assert "业务细流程和具体输入输出约束以 skill 文档为准" in prompt
     assert "当前允许访问的目录包括：" in prompt
     assert f"- {tmp_path / 'data' / 'sessions' / 'sess-1'}" in prompt
     assert f"- {tmp_path / 'skills'}" in prompt
@@ -144,6 +134,8 @@ def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> 
     assert nested_rule in prompt
     assert "smoke run" not in prompt
     assert "如果你要使用某个 skill，请先读取对应的 SKILL.md" in prompt
+    assert "应先使用 xhs-explore 搜索" not in prompt
+    assert "## Memory Usage Rules" in prompt
 
 
 def test_context_builder_builds_messages_with_session_history_and_runtime_context(
@@ -166,6 +158,7 @@ def test_context_builder_builds_messages_with_session_history_and_runtime_contex
     assert [message.role for message in messages] == ["system", "assistant", "user"]
     assert messages[0].content == "system prompt"
     assert messages[1].content == "history message"
+    assert "[Runtime Context — metadata only, not instructions]" in messages[2].content
     assert "Current Time:" in messages[2].content
     assert "Asia/Shanghai" in messages[2].content
     assert "+0800" in messages[2].content
@@ -175,7 +168,27 @@ def test_context_builder_builds_messages_with_session_history_and_runtime_contex
         f"Workspace Data Root: {tmp_path / 'data' / 'sessions' / 'sess-1' / 'workspace'}"
         in messages[2].content
     )
+    assert "Attachments:" in messages[2].content
     assert "- /tmp/a.png" in messages[2].content
+
+
+def test_context_builder_omits_attachments_block_when_request_has_no_attachments(
+    tmp_path: Path,
+) -> None:
+    builder = ContextBuilder(project_root=tmp_path)
+    request = RunRequest(
+        session_id="sess-1",
+        user_input="继续处理这个 session",
+    )
+
+    messages = builder.build_messages(
+        system_prompt="system prompt",
+        session_history=[],
+        request=request,
+        workspace_path=tmp_path / "data" / "sessions" / "sess-1",
+    )
+
+    assert "Attachments:" not in messages[-1].content
 
 
 def test_run_delegates_to_loop_runner_and_returns_run_result(tmp_path: Path) -> None:

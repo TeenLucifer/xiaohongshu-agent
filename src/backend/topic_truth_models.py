@@ -26,7 +26,7 @@ class PostHeat(BaseModel):
 
 
 class CandidatePostRecord(BaseModel):
-    """Minimal candidate/selected post record for workspace display."""
+    """Minimal candidate post record for workspace display."""
 
     post_id: str
     title: str
@@ -35,8 +35,6 @@ class CandidatePostRecord(BaseModel):
     source_url: str | None = None
     heat: PostHeat | None = None
     cover_image_path: str | None = None
-    selected: bool
-    manual_order: int | None = None
     updated_at: datetime
 
 
@@ -47,17 +45,24 @@ class CandidatePostsDocument(BaseModel):
     updated_at: datetime
 
 
-class SelectedPostRecord(BaseModel):
-    """Minimal selected-post state persisted for one workspace."""
+class MaterialRecord(BaseModel):
+    """One persisted workspace material item."""
 
-    post_id: str
-    manual_order: int
+    id: str
+    type: Literal["text", "image", "link"]
+    title: str = ""
+    text_content: str | None = None
+    url: str | None = None
+    image_path: str | None = None
+    mime_type: str | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
-class SelectedPostsDocument(BaseModel):
-    """Selected post list for the workspace."""
+class MaterialsDocument(BaseModel):
+    """Persisted workspace materials."""
 
-    items: list[SelectedPostRecord] = Field(default_factory=list)
+    items: list[MaterialRecord] = Field(default_factory=list)
     updated_at: datetime
 
 

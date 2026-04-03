@@ -6,7 +6,6 @@ import argparse
 import base64
 import json
 import mimetypes
-import os
 import re
 import sys
 from datetime import datetime
@@ -14,15 +13,9 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    pass
-
 from openai import OpenAI
 
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.json"
 DEFAULT_GEMINI_IMAGE_BASE_URL = "https://aihubmix.com/v1"
 DEFAULT_GEMINI_IMAGE_MODEL = "gemini-2.5-flash-image-preview"
 DEFAULT_GEMINI_IMAGE_SIZE = "1024x1024"
@@ -88,12 +81,23 @@ def resolve_selected_editor_images(
 
 
 def get_api_config() -> tuple[str, str, str, str]:
-    api_key = os.environ.get("GEMINI_IMAGE_API_KEY", "").strip()
-    base_url = os.environ.get("GEMINI_IMAGE_BASE_URL", DEFAULT_GEMINI_IMAGE_BASE_URL).strip()
-    model = os.environ.get("GEMINI_IMAGE_MODEL", DEFAULT_GEMINI_IMAGE_MODEL).strip()
-    image_size = os.environ.get("GEMINI_IMAGE_SIZE", DEFAULT_GEMINI_IMAGE_SIZE).strip()
+    if not CONFIG_PATH.exists():
+        raise ValueError(f"缺少 skill 配置文件: {CONFIG_PATH}")
+
+    try:
+        payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"skill 配置文件格式错误: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError("skill 配置文件格式错误: 根对象必须是 JSON object")
+
+    api_key = str(payload.get("api_key", "")).strip()
+    base_url = str(payload.get("base_url", DEFAULT_GEMINI_IMAGE_BASE_URL)).strip()
+    model = str(payload.get("model", DEFAULT_GEMINI_IMAGE_MODEL)).strip()
+    image_size = str(payload.get("size", DEFAULT_GEMINI_IMAGE_SIZE)).strip()
     if not api_key:
-        raise ValueError("缺少 GEMINI_IMAGE_API_KEY 环境变量")
+        raise ValueError(f"{CONFIG_PATH} 缺少 api_key")
     return (
         api_key,
         base_url or DEFAULT_GEMINI_IMAGE_BASE_URL,

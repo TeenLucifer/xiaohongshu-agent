@@ -1,69 +1,22 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, ArrowUp, Check, ExternalLink, X } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { cn } from "../lib/cn";
-import type { CandidatePost } from "../types/workspace";
 import { ImageLightbox } from "./ImageLightbox";
 import { Button } from "./ui/Button";
 
-function buildInitialOrder(posts: CandidatePost[]): string[] {
-  return posts
-    .filter((post) => post.selected)
-    .sort((left, right) => (left.manualOrder ?? Number.MAX_SAFE_INTEGER) - (right.manualOrder ?? Number.MAX_SAFE_INTEGER))
-    .map((post) => post.id);
-}
-
-function sortPosts(posts: CandidatePost[], selectedOrder: string[]): CandidatePost[] {
-  const orderIndexMap = new Map(selectedOrder.map((postId, index) => [postId, index]));
-
-  return [...posts].sort((left, right) => {
-    const leftSelected = orderIndexMap.has(left.id);
-    const rightSelected = orderIndexMap.has(right.id);
-
-    if (leftSelected && rightSelected) {
-      return orderIndexMap.get(left.id)! - orderIndexMap.get(right.id)!;
-    }
-
-    if (leftSelected) {
-      return -1;
-    }
-
-    if (rightSelected) {
-      return 1;
-    }
-
-    return left.title.localeCompare(right.title, "zh-CN");
-  });
-}
-
-function moveItem(order: string[], postId: string, direction: "up" | "down"): string[] {
-  const index = order.indexOf(postId);
-
-  if (index === -1) {
-    return order;
-  }
-
-  const targetIndex = direction === "up" ? index - 1 : index + 1;
-  if (targetIndex < 0 || targetIndex >= order.length) {
-    return order;
-  }
-
-  const next = [...order];
-  [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
-  return next;
-}
+import type { CandidatePost } from "../types/workspace";
 
 export function CandidatePostsSection({
   posts,
-  onSelectedOrderChange,
+  onDeletePost,
 }: {
   posts: CandidatePost[];
-  onSelectedOrderChange?: (nextSelectedOrder: string[]) => void;
+  onDeletePost?: (postId: string) => void;
 }): JSX.Element {
   const [activePostId, setActivePostId] = useState<string | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const selectedOrder = useMemo(() => buildInitialOrder(posts), [posts]);
+  const displayPosts = useMemo(() => [...posts], [posts]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
@@ -103,7 +56,6 @@ export function CandidatePostsSection({
     };
   }, [activePostId, lightboxIndex, posts]);
 
-  const displayPosts = useMemo(() => sortPosts(posts, selectedOrder), [posts, selectedOrder]);
   const activePost = displayPosts.find((post) => post.id === activePostId) ?? null;
   const activeImages = activePost?.images ?? [];
   const currentImage = activeImages[activeImageIndex] ?? null;
@@ -114,25 +66,12 @@ export function CandidatePostsSection({
     setLightboxIndex(null);
   }, [activePostId]);
 
-  function commitSelectedOrder(nextSelectedOrder: string[]): void {
-    onSelectedOrderChange?.(nextSelectedOrder);
-  }
-
-  function toggleSelected(postId: string): void {
-    if (selectedOrder.includes(postId)) {
-      commitSelectedOrder(selectedOrder.filter((value) => value !== postId));
-      return;
+  function handleDeletePost(postId: string): void {
+    if (activePostId === postId) {
+      setActivePostId(null);
+      setLightboxIndex(null);
     }
-    commitSelectedOrder([...selectedOrder, postId]);
-  }
-
-  function moveSelected(postId: string, direction: "up" | "down"): void {
-    commitSelectedOrder(moveItem(selectedOrder, postId, direction));
-  }
-
-  function getOrder(postId: string): number | null {
-    const index = selectedOrder.indexOf(postId);
-    return index === -1 ? null : index + 1;
+    onDeletePost?.(postId);
   }
 
   return (
@@ -140,20 +79,16 @@ export function CandidatePostsSection({
       {displayPosts.length === 0 ? <p className="text-sm text-slate-500">空状态</p> : null}
 
       <div aria-label="搜索结果卡片流" className="flex flex-wrap items-start gap-2">
-        {displayPosts.map((post) => {
-          const order = getOrder(post.id);
-          const selected = order !== null;
-
-          return (
+        {displayPosts.map((post) => (
+          <div
+            className="group relative w-[126px] shrink-0 overflow-hidden rounded-[16px] border border-slate-200 bg-slate-50 text-left transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white"
+            key={post.id}
+          >
             <button
               aria-controls="candidate-post-detail-dialog"
               aria-expanded={activePostId === post.id}
               aria-haspopup="dialog"
-              className={cn(
-                "group relative w-[126px] shrink-0 overflow-hidden rounded-[16px] border bg-slate-50 text-left transition duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:bg-white",
-                selected ? "border-blue-200 bg-blue-50/70" : "border-slate-200"
-              )}
-              key={post.id}
+              className="block w-full text-left"
               onClick={() => {
                 setActivePostId(post.id);
                 setActiveImageIndex(0);
@@ -164,15 +99,21 @@ export function CandidatePostsSection({
               <div className="px-2 py-1.5">
                 <p className="truncate text-[11px] font-medium text-slate-700">{post.title}</p>
               </div>
-
-              {selected ? (
-                <span className="absolute right-1.5 top-1.5 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold text-white">
-                  {order}
-                </span>
-              ) : null}
             </button>
-          );
-        })}
+
+            <button
+              aria-label={`删除 ${post.title}`}
+              className="absolute right-1.5 top-1.5 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200/0 bg-white/92 text-slate-500 opacity-0 shadow-sm transition duration-150 hover:border-slate-200 hover:text-rose-600 group-hover:opacity-100"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleDeletePost(post.id);
+              }}
+              type="button"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={1.8} />
+            </button>
+          </div>
+        ))}
       </div>
 
       <AnimatePresence>
@@ -231,17 +172,13 @@ export function CandidatePostsSection({
                       >
                         上一张
                       </Button>
-                      <div
-                        aria-label="图片位置指示"
-                        className="flex items-center gap-1.5"
-                      >
+                      <div aria-label="图片位置指示" className="flex items-center gap-1.5">
                         {activeImages.map((image, index) => (
                           <button
                             aria-label={`切换到第 ${index + 1} 张图片`}
-                            className={cn(
-                              "h-2.5 w-2.5 rounded-full transition-colors duration-200",
+                            className={`h-2.5 w-2.5 rounded-full transition-colors duration-200 ${
                               index === activeImageIndex ? "bg-slate-900" : "bg-slate-300"
-                            )}
+                            }`}
                             key={image.id}
                             onClick={() => setActiveImageIndex(index)}
                             type="button"
@@ -283,25 +220,14 @@ export function CandidatePostsSection({
                   <ExternalLink className="h-4 w-4" strokeWidth={1.8} />
                 </a>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {selectedOrder.includes(activePost.id) ? (
-                    <>
-                      <Button onClick={() => moveSelected(activePost.id, "up")} size="sm" type="button" variant="secondary">
-                        <ArrowUp className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        上移
-                      </Button>
-                      <Button onClick={() => moveSelected(activePost.id, "down")} size="sm" type="button" variant="secondary">
-                        <ArrowDown className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        下移
-                      </Button>
-                    </>
-                  ) : null}
-
-                  <Button onClick={() => toggleSelected(activePost.id)} type="button" variant="primary">
-                    <Check className="h-4 w-4" strokeWidth={1.8} />
-                    {selectedOrder.includes(activePost.id) ? "移出已选" : "加入已选"}
-                  </Button>
-                </div>
+                <Button
+                  onClick={() => handleDeletePost(activePost.id)}
+                  type="button"
+                  variant="secondary"
+                >
+                  <X className="h-4 w-4" strokeWidth={1.8} />
+                  删除帖子
+                </Button>
               </div>
             </motion.div>
           </motion.div>

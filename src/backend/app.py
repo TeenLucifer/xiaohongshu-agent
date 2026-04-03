@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import base64
 from pathlib import Path
 from typing import Annotated, Any, Literal, cast
 
@@ -18,14 +19,17 @@ from agent.trace import TraceMode
 from backend.schemas import (
     CopyDraftResponse,
     CopyDraftSelectionPolishResponse,
+    CreateImageMaterialsRequestBody,
+    CreateLinkMaterialRequestBody,
+    CreateTextMaterialRequestBody,
     CreateTopicRequestBody,
     ErrorResponse,
+    MaterialsResponse,
     PolishCopyDraftSelectionRequestBody,
     ResetRequestBody,
     RunRequestBody,
     UpdateCopyDraftRequestBody,
     UpdateEditorImagesRequestBody,
-    UpdateSelectedPostsRequestBody,
 )
 from backend.service import BackendApiError, BackendAppService
 from backend.topic_meta_store import TopicMetaStore
@@ -206,18 +210,6 @@ def create_app(
             topic_title=topic_title,
         )
 
-    @app.put("/api/topics/{topic_id}/selected-posts")
-    async def update_selected_posts(
-        request: Request,
-        topic_id: str,
-        payload: UpdateSelectedPostsRequestBody,
-    ) -> Any:
-        return request.app.state.backend_service.update_selected_posts(
-            topic_id=topic_id,
-            topic_title=payload.topic_title,
-            post_ids=payload.post_ids,
-        )
-
     @app.get("/api/topics/{topic_id}/editor-images")
     async def get_editor_images(
         request: Request,
@@ -227,6 +219,77 @@ def create_app(
         return request.app.state.backend_service.get_editor_images(
             topic_id=topic_id,
             topic_title=topic_title,
+        )
+
+    @app.get("/api/topics/{topic_id}/materials")
+    async def get_materials(
+        request: Request,
+        topic_id: str,
+        topic_title: Annotated[str, Query(min_length=1)],
+    ) -> MaterialsResponse:
+        return request.app.state.backend_service.get_materials(
+            topic_id=topic_id,
+            topic_title=topic_title,
+        )
+
+    @app.post("/api/topics/{topic_id}/materials/text")
+    async def create_text_material(
+        request: Request,
+        topic_id: str,
+        payload: CreateTextMaterialRequestBody,
+    ) -> MaterialsResponse:
+        return request.app.state.backend_service.create_text_material(
+            topic_id=topic_id,
+            topic_title=payload.topic_title,
+            title=payload.title,
+            text_content=payload.text_content,
+        )
+
+    @app.post("/api/topics/{topic_id}/materials/link")
+    async def create_link_material(
+        request: Request,
+        topic_id: str,
+        payload: CreateLinkMaterialRequestBody,
+    ) -> MaterialsResponse:
+        return request.app.state.backend_service.create_link_material(
+            topic_id=topic_id,
+            topic_title=payload.topic_title,
+            title=payload.title,
+            url=payload.url,
+        )
+
+    @app.post("/api/topics/{topic_id}/materials/images")
+    async def upload_material_images(
+        request: Request,
+        topic_id: str,
+        payload: CreateImageMaterialsRequestBody,
+    ) -> MaterialsResponse:
+        file_payloads: list[dict[str, Any]] = []
+        for item in payload.items:
+            file_payloads.append(
+                {
+                    "filename": item.filename,
+                    "content_type": item.content_type,
+                    "content": base64.b64decode(item.content_base64),
+                }
+            )
+        return request.app.state.backend_service.upload_material_images(
+            topic_id=topic_id,
+            topic_title=payload.topic_title,
+            files=file_payloads,
+        )
+
+    @app.delete("/api/topics/{topic_id}/materials/{material_id}")
+    async def delete_material(
+        request: Request,
+        topic_id: str,
+        material_id: str,
+        topic_title: Annotated[str, Query(min_length=1)],
+    ) -> Any:
+        return request.app.state.backend_service.delete_material(
+            topic_id=topic_id,
+            topic_title=topic_title,
+            material_id=material_id,
         )
 
     @app.put("/api/topics/{topic_id}/editor-images")
@@ -279,6 +342,19 @@ def create_app(
             topic_id=topic_id,
             topic_title=topic_title,
             image_id=image_id,
+        )
+
+    @app.delete("/api/topics/{topic_id}/posts/{post_id}")
+    async def delete_candidate_post(
+        request: Request,
+        topic_id: str,
+        post_id: str,
+        topic_title: Annotated[str, Query(min_length=1)],
+    ) -> Any:
+        return request.app.state.backend_service.delete_candidate_post(
+            topic_id=topic_id,
+            topic_title=topic_title,
+            post_id=post_id,
         )
 
     @app.get("/api/topics/{topic_id}/assets/{asset_path:path}")

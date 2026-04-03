@@ -31,20 +31,22 @@ from backend.schemas import (
     CopyDraftResponse,
     CopyDraftSelectionPolishResponse,
     CreateTopicResponse,
+    DeleteCandidatePostResponse,
     DeleteImageResultResponse,
+    DeleteMaterialResponse,
     DeleteTopicResponse,
     EditorImageResponse,
     EditorImagesResponse,
     GeneratedImageResultResponse,
     LastRunResponse,
+    MaterialItemResponse,
+    MaterialsResponse,
     MessageImageAttachmentResponse,
     MessageResponse,
     MessagesResponse,
     PatternSummaryContentResponse,
     ResetResponse,
     RunResponse,
-    SelectedPostItemResponse,
-    SelectedPostsResponse,
     SkillListItemResponse,
     SkillsListResponse,
     StreamingRunEvent,
@@ -63,10 +65,10 @@ from backend.topic_truth_models import (
     EditorImageRecord,
     EditorImagesDocument,
     GeneratedImageResultRecord,
+    MaterialRecord,
+    MaterialsDocument,
     PostDetail,
     PostMetrics,
-    SelectedPostRecord,
-    SelectedPostsDocument,
 )
 from backend.topic_truth_store import SessionWorkspaceStore
 
@@ -410,31 +412,24 @@ class BackendAppService:
         topic_title: str,
     ) -> WorkspaceContextResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        materials = self._workspace_store.read_materials(session.session_id)
         post_details = self._workspace_store.list_post_details(session.session_id)
-        selected_document = self._workspace_store.read_selected_posts(session.session_id)
         pattern_summary = self._workspace_store.read_pattern_summary(session.session_id)
         copy_draft = self._workspace_store.read_copy_draft(session.session_id)
         editor_images = self._workspace_store.read_editor_images(session.session_id)
         image_results = self._workspace_store.read_image_results(session.session_id)
-        selected_items = selected_document.items if selected_document is not None else []
-        selected_by_post_id = {item.post_id: item.manual_order for item in selected_items}
         candidate_posts = []
         updated_at = record.updated_at
 
         if post_details:
             candidate_posts = [
-                self._convert_post_detail_to_candidate_post(
-                    topic_id=topic_id,
-                    detail=detail,
-                    manual_order=selected_by_post_id.get(detail.post_id),
-                )
+                self._convert_post_detail_to_candidate_post(topic_id=topic_id, detail=detail)
                 for detail in post_details
             ]
             updated_at = max(updated_at, *(detail.updated_at for detail in post_details))
 
-        if selected_document is not None and selected_document.updated_at > updated_at:
-            updated_at = selected_document.updated_at
-
+        if materials is not None and materials.updated_at > updated_at:
+            updated_at = materials.updated_at
         if pattern_summary is not None and pattern_summary.updated_at > updated_at:
             updated_at = pattern_summary.updated_at
         if copy_draft is not None and copy_draft.updated_at > updated_at:
@@ -447,6 +442,14 @@ class BackendAppService:
         return WorkspaceContextResponse(
             topic_id=record.topic_id,
             topic_title=self._current_topic_title(session, fallback=topic_title),
+            materials=(
+                [
+                    self._convert_material(topic_id=topic_id, record=item)
+                    for item in materials.items
+                ]
+                if materials is not None
+                else []
+            ),
             candidate_posts=candidate_posts,
             pattern_summary=(
                 PatternSummaryContentResponse.from_record(pattern_summary)
@@ -477,55 +480,213 @@ class BackendAppService:
             updated_at=updated_at,
         )
 
-    def update_selected_posts(
+    def get_materials(
         self,
         *,
         topic_id: str,
         topic_title: str,
-        post_ids: list[str],
-    ) -> SelectedPostsResponse:
+    ) -> MaterialsResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
-        seen: set[str] = set()
-        selected_items: list[SelectedPostRecord] = []
-
-        for post_id in post_ids:
-            normalized_post_id = post_id.strip()
-            if normalized_post_id == "" or normalized_post_id in seen:
-                continue
-            if (
-                self._workspace_store.read_post_detail(session.session_id, normalized_post_id)
-                is None
-            ):
-                continue
-            seen.add(normalized_post_id)
-            selected_items.append(
-                SelectedPostRecord(
-                    post_id=normalized_post_id,
-                    manual_order=len(selected_items) + 1,
-                )
-            )
-
-        updated_at = now_local()
-        self._workspace_store.write_selected_posts(
-            session.session_id,
-            SelectedPostsDocument(
-                items=selected_items,
-                updated_at=updated_at,
+        document = self._workspace_store.read_materials(session.session_id)
+        updated_at = document.updated_at if document is not None else record.updated_at
+        return MaterialsResponse(
+            topic_id=record.topic_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            items=(
+                [self._convert_material(topic_id=topic_id, record=item) for item in document.items]
+                if document is not None
+                else []
             ),
+            updated_at=updated_at,
+        )
+
+    def create_text_material(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        title: str,
+        text_content: str,
+    ) -> MaterialsResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        updated_at = now_local()
+        existing = self._workspace_store.read_materials(session.session_id)
+        items = list(existing.items) if existing is not None else []
+        items.append(
+            MaterialRecord(
+                id=_generate_material_id(),
+                type="text",
+                title=title.strip(),
+                text_content=text_content.strip(),
+                created_at=updated_at,
+                updated_at=updated_at,
+            )
+        )
+        document = self._workspace_store.write_materials(
+            session.session_id,
+            MaterialsDocument(items=items, updated_at=updated_at),
         )
         record.updated_at = updated_at
         self._topic_store.save(record)
         self._sync_topic_meta(record, description=None)
-        return SelectedPostsResponse(
+        return MaterialsResponse(
             topic_id=record.topic_id,
             topic_title=self._current_topic_title(session, fallback=topic_title),
-            items=[
-                SelectedPostItemResponse(
-                    post_id=item.post_id,
-                    manual_order=item.manual_order,
+            items=[self._convert_material(topic_id=topic_id, record=item) for item in document.items],
+            updated_at=updated_at,
+        )
+
+    def create_link_material(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        title: str,
+        url: str,
+    ) -> MaterialsResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        updated_at = now_local()
+        existing = self._workspace_store.read_materials(session.session_id)
+        items = list(existing.items) if existing is not None else []
+        items.append(
+            MaterialRecord(
+                id=_generate_material_id(),
+                type="link",
+                title=title.strip(),
+                url=url.strip(),
+                created_at=updated_at,
+                updated_at=updated_at,
+            )
+        )
+        document = self._workspace_store.write_materials(
+            session.session_id,
+            MaterialsDocument(items=items, updated_at=updated_at),
+        )
+        record.updated_at = updated_at
+        self._topic_store.save(record)
+        self._sync_topic_meta(record, description=None)
+        return MaterialsResponse(
+            topic_id=record.topic_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            items=[self._convert_material(topic_id=topic_id, record=item) for item in document.items],
+            updated_at=updated_at,
+        )
+
+    def upload_material_images(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        files: list[dict[str, Any]],
+    ) -> MaterialsResponse:
+        if not files:
+            raise BackendApiError(
+                error_code="empty_material_images",
+                message="请至少上传一张图片素材。",
+                status_code=400,
+            )
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        updated_at = now_local()
+        existing = self._workspace_store.read_materials(session.session_id)
+        items = list(existing.items) if existing is not None else []
+        materials_root = self._workspace_store.get_materials_root(session.session_id)
+        materials_root.mkdir(parents=True, exist_ok=True)
+
+        for file in files:
+            content_type = str(file.get("content_type") or "")
+            if not content_type.startswith("image/"):
+                raise BackendApiError(
+                    error_code="invalid_material_image",
+                    message="素材区只支持上传图片文件。",
+                    status_code=400,
                 )
-                for item in selected_items
-            ],
+            material_id = _generate_material_id()
+            original_name = str(file.get("filename") or "material-image")
+            suffix = Path(original_name).suffix or _guess_suffix_from_content_type(content_type)
+            target_name = f"{material_id}{suffix}"
+            target_path = materials_root / target_name
+            target_path.write_bytes(cast(bytes, file["content"]))
+            items.append(
+                MaterialRecord(
+                    id=material_id,
+                    type="image",
+                    title=Path(original_name).stem,
+                    image_path=str(Path("materials") / target_name),
+                    mime_type=content_type or None,
+                    created_at=updated_at,
+                    updated_at=updated_at,
+                )
+            )
+
+        document = self._workspace_store.write_materials(
+            session.session_id,
+            MaterialsDocument(items=items, updated_at=updated_at),
+        )
+        record.updated_at = updated_at
+        self._topic_store.save(record)
+        self._sync_topic_meta(record, description=None)
+        return MaterialsResponse(
+            topic_id=record.topic_id,
+            topic_title=self._current_topic_title(session, fallback=topic_title),
+            items=[self._convert_material(topic_id=topic_id, record=item) for item in document.items],
+            updated_at=updated_at,
+        )
+
+    def delete_material(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        material_id: str,
+    ) -> DeleteMaterialResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        document = self._workspace_store.read_materials(session.session_id)
+        if document is None:
+            raise BackendApiError(
+                error_code="material_not_found",
+                message="未找到对应素材。",
+                status_code=404,
+            )
+        matched = next((item for item in document.items if item.id == material_id), None)
+        if matched is None:
+            raise BackendApiError(
+                error_code="material_not_found",
+                message="未找到对应素材。",
+                status_code=404,
+            )
+        updated_at = now_local()
+        self._workspace_store.write_materials(
+            session.session_id,
+            document.model_copy(
+                update={
+                    "items": [item for item in document.items if item.id != material_id],
+                    "updated_at": updated_at,
+                }
+            ),
+        )
+        if matched.image_path:
+            self._workspace_store.delete_material_asset(session.session_id, matched.image_path)
+
+        editor_images = self._workspace_store.read_editor_images(session.session_id)
+        if editor_images is not None:
+            filtered_items = [
+                item for item in editor_images.items if item.source_image_id != material_id
+            ]
+            if len(filtered_items) != len(editor_images.items):
+                normalized_items = [
+                    item.model_copy(update={"order": index + 1})
+                    for index, item in enumerate(filtered_items)
+                ]
+                self._workspace_store.write_editor_images(
+                    session.session_id,
+                    EditorImagesDocument(items=normalized_items, updated_at=updated_at),
+                )
+
+        record.updated_at = updated_at
+        self._topic_store.save(record)
+        self._sync_topic_meta(record, description=None)
+        return DeleteMaterialResponse(
+            deleted_material_id=material_id,
             updated_at=updated_at,
         )
 
@@ -749,6 +910,43 @@ class BackendAppService:
             self._sync_topic_meta(record, description=None)
         return DeleteImageResultResponse(deleted_image_id=image_id, updated_at=updated_at)
 
+    def delete_candidate_post(
+        self,
+        *,
+        topic_id: str,
+        topic_title: str,
+        post_id: str,
+    ) -> DeleteCandidatePostResponse:
+        record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
+        if self._workspace_store.read_post_detail(session.session_id, post_id) is None:
+            raise BackendApiError(
+                error_code="post_not_found",
+                message="未找到对应帖子。",
+                status_code=404,
+            )
+
+        self._workspace_store.delete_post(session.session_id, post_id)
+        updated_at = now_local()
+        editor_images = self._workspace_store.read_editor_images(session.session_id)
+        if editor_images is not None:
+            filtered_items = [
+                item for item in editor_images.items if item.source_post_id != post_id
+            ]
+            if len(filtered_items) != len(editor_images.items):
+                normalized_items = [
+                    item.model_copy(update={"order": index + 1})
+                    for index, item in enumerate(filtered_items)
+                ]
+                self._workspace_store.write_editor_images(
+                    session.session_id,
+                    EditorImagesDocument(items=normalized_items, updated_at=updated_at),
+                )
+
+        record.updated_at = updated_at
+        self._topic_store.save(record)
+        self._sync_topic_meta(record, description=None)
+        return DeleteCandidatePostResponse(deleted_post_id=post_id, updated_at=updated_at)
+
     def reset_topic(self, *, topic_id: str, topic_title: str) -> ResetResponse:
         record, session = self._resolve_session(topic_id=topic_id, topic_title=topic_title)
         snapshot = self._runtime.reset_session(session.session_id)
@@ -962,7 +1160,6 @@ class BackendAppService:
         *,
         topic_id: str,
         detail: PostDetail,
-        manual_order: int | None,
     ) -> CandidatePostContextResponse:
         body_text = detail.content.text
         image_url = self._resolve_candidate_image_url(topic_id=topic_id, detail=detail)
@@ -984,8 +1181,6 @@ class BackendAppService:
                 detail=detail,
                 cover_image_url=image_url,
             ),
-            selected=manual_order is not None,
-            manualOrder=manual_order,
         )
 
     def _build_candidate_images(
@@ -1062,6 +1257,19 @@ class BackendAppService:
             record,
             image_url=_to_topic_asset_url(topic_id=topic_id, relative_path=record.image_path),
         )
+
+    def _convert_material(
+        self,
+        *,
+        topic_id: str,
+        record: MaterialRecord,
+    ) -> MaterialItemResponse:
+        image_url = (
+            _to_topic_asset_url(topic_id=topic_id, relative_path=record.image_path)
+            if record.image_path is not None
+            else None
+        )
+        return MaterialItemResponse.from_record(record, image_url=image_url)
 
     def _list_generated_image_ids(self, session_id: str) -> set[str]:
         document = self._workspace_store.read_image_results(session_id)
@@ -1250,6 +1458,20 @@ def _generate_topic_id() -> str:
     randomness = int.from_bytes(secrets.token_bytes(10), "big")
     ulid = f"{_encode_crockford(timestamp_ms, 10)}{_encode_crockford(randomness, 16)}"
     return f"topic_{ulid}"
+
+
+def _generate_material_id() -> str:
+    return f"material_{uuid4().hex[:12]}"
+
+
+def _guess_suffix_from_content_type(content_type: str) -> str:
+    mapping = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+    }
+    return mapping.get(content_type, ".png")
 
 
 class _QueueRunEventSink:

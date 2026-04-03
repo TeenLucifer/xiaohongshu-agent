@@ -24,7 +24,7 @@ metadata:
   - 解析用户提示词中的“X 号图”引用
   - 调用图片生成脚本
   - 将结果写入 `generated_images/` 和 `image_results.json`
-- 你不得直接修改 `selected_posts.json`、`pattern_summary.json` 或 `copy_draft.json`
+- 你不得直接修改 `pattern_summary.json` 或 `copy_draft.json`
 
 ## 必读输入
 
@@ -55,6 +55,7 @@ metadata:
 5. 脚本会：
    - 读取编辑区原始参考图
    - 按编号直接将多张参考图转成 base64 数据 URL
+   - 读取当前 skill 目录下的 `config.json`
    - 通过 AIHubMix OpenAI 兼容接口调用 Gemini 图片生成
    - 写入 `generated_images/`
    - 追加写入 `image_results.json`
@@ -65,6 +66,17 @@ metadata:
    - 使用了哪些编辑区编号图片作为参考
    - 已写入哪些文件
    - 本轮生成了多少张图片
+
+## 配置
+
+- 图片模型配置只从当前 skill 目录读取：
+  - `skills/image-generation/config.json`
+- 需要至少提供：
+  - `api_key`
+  - 可选 `base_url`
+  - 可选 `model`
+  - 可选 `size`
+- 仓库提交 `config.example.json` 作为模板，本地实际密钥不进入 Git
 
 ## 写回约束
 

@@ -45,13 +45,15 @@
   - 右侧“创作”tab 中的图片编辑区、素材图拖拽与编辑区编号
 - `008-image-lightbox-preview`
   - 候选帖子、图片结果和图片编辑器中的统一大图预览弹层
+- `028-workspace-materials-pool`
+  - 创作 tab 的图片区本地图片上传与候选图来源管理
 - `005-home-entry`
   - 首页“新话题”入口、历史话题次入口与左侧“新话题”导航
 - `006-skills-page`
   - Skills 独立页、skills 列表与技能详情弹窗
 - `001-topic-workspace`
   - 话题工作台整体结构
-  - 左侧导航、中间对话主栏、右侧工作区
+  - 左侧导航与 workspace-first 主工作区
 - `002-candidate-posts`
   - 候选帖子展示、选择、排序、详情弹窗
 - `003-content-creation`
@@ -64,7 +66,8 @@
 当前主分支已经完成的主要部分：
 
 - “新话题”首页入口与历史话题次入口
-- 前端三栏工作台
+- workspace-first 工作台
+- 工作区收口为 `创作 / 对话` 两个 tab
 - Skills 独立页与技能详情弹窗
 - 话题列表、创建/删除与真实 topic 管理
 - 聊天式主栏、Markdown 显示、final answer 收口与折叠 tool 摘要
@@ -75,12 +78,15 @@
 - Context Memory 子系统
 - 后端最小胶水层
 - session workspace 数据层
-- 候选帖子与总结的右侧工作区真实化
+- 候选帖子与总结的工作区真实化
 - 真实图片生成与右侧图片区展示主链路
+- 搜索结果 section 并入 `创作` tab 顶部
+- 文案区白板式 Markdown 编辑与选区 AI 润色
+- 创作图片区本地图片上传与候选图来源管理
 
 当前仍在继续推进的部分：
 
-- 更完整的右侧工作区真实化
+- 更完整的工作区真实化
 - 更深入的 xhs 任务执行能力
 
 所以后续如果进入 agent / 后端阶段，应继续沿 `010+` 和 `020+` 的编号推进，不再把任务堆进 `001~004`。
@@ -114,25 +120,22 @@
 - `016-agent-local-harness`
   - 本地 Python 调用入口与 smoke harness
 - `017-xhs-research-persist-loop`
-  - 小红书调研闭环、Top 3 图文帖子详情采集与标准帖子包下载
-- `018-pattern-summary-skill`
-  - 基于已选帖子生成结构化总结，并写入 `pattern_summary.json`
-- `019-copy-rewrite-skill`
-  - 基于已选帖子与总结结果生成文案，并写入 `copy_draft.json`
-- `024-image-analysis-skill`
-  - 调用视觉 API 分析帖子图片，返回结构化文本分析结果
-  - 供 pattern-summary 等技能消费
-- `025-image-generation-skill`
-  - 基于编辑区参考图与用户提示词生成图片，并写回 `generated_images/` 与 `image_results.json`
-- `026-selection-polish-skill`
-  - 基于整篇文案上下文和用户提示词，对当前选区进行局部润色，并返回替换文本
+  - 小红书调研闭环、发散搜集后的 Top 6 图文帖子详情采集与标准帖子包下载
+- `027-agent-skills-suite`
+  - 统一管理业务型 skills 的边界、输入输出、配置与验收
+  - 当前包含：
+    - `pattern-summary`
+    - `copy-rewrite`
+    - `image-analysis`
+    - `image-generation`
+    - `selection-polish`
 
 ### 后端与集成
 
 - `020-backend-glue-minimal`
   - 最小后端胶水层、`data/topic-index.json` 映射与同步主栏 API
 - `021-topic-truth-store`
-  - session workspace 数据层、候选帖子/总结/文案/图片等右侧工作区对象存储
+  - session workspace 数据层、候选帖子/总结/文案/图片等工作区对象存储
 - `022-streaming-run-api`
   - 基于后端 run 接口的流式输出协议与主栏渐进展示能力
 - `023-topic-management`

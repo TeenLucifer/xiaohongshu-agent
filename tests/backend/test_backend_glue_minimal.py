@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 from pathlib import Path
 from typing import Any, cast
@@ -16,13 +17,13 @@ from agent.tools.base import Tool, ToolArguments, ToolDefinition, ToolExecutionC
 from backend.app import create_app
 from backend.topic_truth_models import (
     CopyDraftRecord,
+    EditorImageRecord,
+    EditorImagesDocument,
     PatternSummaryRecord,
     PostContent,
     PostDetail,
     PostMediaAsset,
     PostMetrics,
-    SelectedPostRecord,
-    SelectedPostsDocument,
 )
 from backend.topic_truth_store import SessionWorkspaceStore
 
@@ -192,13 +193,6 @@ def seed_session_context(tmp_path: Path, session_id: str) -> None:
                     order=2,
                 ),
             ],
-            updated_at=now,
-        ),
-    )
-    store.write_selected_posts(
-        session_id,
-        SelectedPostsDocument(
-            items=[SelectedPostRecord(post_id="post-1", manual_order=1)],
             updated_at=now,
         ),
     )
@@ -651,11 +645,79 @@ def test_context_endpoint_returns_candidate_posts_and_pattern_summary(tmp_path: 
         "/api/topics/topic-1/assets/posts/post-1/assets/image-02.jpg"
     )
     assert payload["candidate_posts"][0]["heat"] == "收藏 20 · 点赞 10 · 评论 3"
+    assert payload["materials"] == []
     assert payload["pattern_summary"]["titlePatterns"] == ["场景 + 结论"]
     assert payload["copy_draft"]["title"] == "通勤穿搭别乱买，4 件基础款就够了"
 
 
-def test_update_selected_posts_endpoint_persists_selection_order(tmp_path: Path) -> None:
+def test_materials_endpoints_create_delete_and_surface_in_context(tmp_path: Path) -> None:
+    async def run() -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]]:
+        async with make_client(tmp_path) as client:
+            created = await client.post(
+                "/api/topics",
+                json={"title": "素材话题", "description": ""},
+            )
+            topic = cast(dict[str, Any], created.json())
+
+            text_response = await client.post(
+                f"/api/topics/{topic['topic_id']}/materials/text",
+                json={
+                    "topic_title": "素材话题",
+                    "title": "选题要求",
+                    "text_content": "强调低预算和高效率",
+                },
+            )
+            assert text_response.status_code == 200
+
+            image_response = await client.post(
+                f"/api/topics/{topic['topic_id']}/materials/images",
+                json={
+                    "topic_title": "素材话题",
+                    "items": [
+                        {
+                            "filename": "cover.png",
+                            "content_type": "image/png",
+                            "content_base64": base64.b64encode(b"fake-image").decode("ascii"),
+                        }
+                    ],
+                },
+            )
+            assert image_response.status_code == 200
+
+            materials_response = await client.get(
+                f"/api/topics/{topic['topic_id']}/materials",
+                params={"topic_title": "素材话题"},
+            )
+            context_response = await client.get(
+                f"/api/topics/{topic['topic_id']}/context",
+                params={"topic_title": "素材话题"},
+            )
+            assert materials_response.status_code == 200
+            assert context_response.status_code == 200
+            image_material_id = cast(dict[str, Any], image_response.json())["items"][1]["id"]
+            delete_response = await client.delete(
+                f"/api/topics/{topic['topic_id']}/materials/{image_material_id}",
+                params={"topic_title": "素材话题"},
+            )
+            assert delete_response.status_code == 200
+            return (
+                cast(dict[str, Any], image_response.json()),
+                cast(dict[str, Any], materials_response.json()),
+                cast(dict[str, Any], context_response.json()),
+                cast(dict[str, Any], delete_response.json()),
+            )
+
+    image_payload, materials_payload, context_payload, delete_payload = asyncio.run(run())
+    assert [item["type"] for item in image_payload["items"]] == ["text", "image"]
+    assert materials_payload["items"][0]["title"] == "选题要求"
+    assert materials_payload["items"][1]["imagePath"].startswith("materials/")
+    assert context_payload["materials"][1]["imageUrl"].startswith("/api/topics/")
+    assert delete_payload["deleted_material_id"] == image_payload["items"][1]["id"]
+
+
+def test_delete_candidate_post_endpoint_removes_post_and_related_editor_images(
+    tmp_path: Path,
+) -> None:
     async def run() -> tuple[dict[str, Any], dict[str, Any]]:
         async with make_client(tmp_path) as client:
             workspace_response = await client.get(
@@ -679,31 +741,43 @@ def test_update_selected_posts_endpoint_persists_selection_order(tmp_path: Path)
                     updated_at=now,
                 ),
             )
+            store.write_editor_images(
+                session_id,
+                EditorImagesDocument(
+                    items=[
+                        EditorImageRecord(
+                            id="editor-1",
+                            order=1,
+                            source_type="material",
+                            source_post_id="post-2",
+                            source_image_id="image-01",
+                            image_path="posts/post-2/assets/image-01.jpg",
+                            alt="待删除素材图",
+                        )
+                    ],
+                    updated_at=now,
+                ),
+            )
 
-            update_response = await client.put(
-                "/api/topics/topic-1/selected-posts",
-                json={
-                    "topic_title": "话题一",
-                    "post_ids": ["post-2", "post-1"],
-                },
+            delete_response = await client.delete(
+                "/api/topics/topic-1/posts/post-2",
+                params={"topic_title": "话题一"},
             )
             context_response = await client.get(
                 "/api/topics/topic-1/context",
                 params={"topic_title": "话题一"},
             )
-            assert update_response.status_code == 200
+            assert delete_response.status_code == 200
             assert context_response.status_code == 200
             return (
-                cast(dict[str, Any], update_response.json()),
+                cast(dict[str, Any], delete_response.json()),
                 cast(dict[str, Any], context_response.json()),
             )
 
-    update_payload, context_payload = asyncio.run(run())
-    assert [item["post_id"] for item in update_payload["items"]] == ["post-2", "post-1"]
-    selected_posts = {item["id"]: item for item in context_payload["candidate_posts"]}
-    assert selected_posts["post-2"]["selected"] is True
-    assert selected_posts["post-2"]["manualOrder"] == 1
-    assert selected_posts["post-1"]["manualOrder"] == 2
+    delete_payload, context_payload = asyncio.run(run())
+    assert delete_payload["deleted_post_id"] == "post-2"
+    assert [item["id"] for item in context_payload["candidate_posts"]] == ["post-1"]
+    assert context_payload["editor_images"] == []
 
 
 def test_topic_asset_endpoint_serves_copied_asset(tmp_path: Path) -> None:

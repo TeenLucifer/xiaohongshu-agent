@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import { vi } from "vitest";
 import { AppRoutes } from "./routes";
 
 async function renderWorkspace(): Promise<ReturnType<typeof render>> {
@@ -47,9 +48,6 @@ describe("content creation feature", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    // 切换到"创作" tab
-    await user.click(screen.getByRole("button", { name: "创作" }));
-
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
     if (!(copyGroup instanceof HTMLElement)) {
@@ -58,8 +56,8 @@ describe("content creation feature", () => {
 
     await user.click(copyToggle);
 
-    expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
-    expect(within(copyGroup).getByText("Markdown 文案")).toBeInTheDocument();
+    expect(within(copyGroup).queryByText("当前文案")).not.toBeInTheDocument();
+    expect(within(copyGroup).queryByText("Markdown 文案")).not.toBeInTheDocument();
     expect(within(copyGroup).getByLabelText("文案正文编辑器")).toBeInTheDocument();
     expect(within(copyGroup).getByRole("button", { name: "重新生成文案" })).toBeInTheDocument();
   });
@@ -79,16 +77,13 @@ describe("content creation feature", () => {
     expect(within(candidateGroup).getByText("标题模式")).toBeInTheDocument();
     expect(within(candidateGroup).getByText("高频关键词")).toBeInTheDocument();
 
-    // 切换到"创作" tab 查看文案和图片
-    await user.click(screen.getByRole("button", { name: "创作" }));
-
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
     if (!(copyGroup instanceof HTMLElement)) {
       throw new Error("copy group not found");
     }
     await user.click(copyToggle);
-    expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
+    expect(within(copyGroup).queryByText("当前文案")).not.toBeInTheDocument();
     expect(within(copyGroup).getByLabelText("文案正文编辑器")).toBeInTheDocument();
 
     const imageToggle = screen.getByRole("button", { name: "展开图片" });
@@ -100,6 +95,7 @@ describe("content creation feature", () => {
     expect(within(imageGroup).getByText(/^素材图片 \(\d+\)$/)).toBeInTheDocument();
     expect(within(imageGroup).getByText(/^编辑区 \(\d+\)$/)).toBeInTheDocument();
     expect(within(imageGroup).getByPlaceholderText("输入你想继续让agent处理的内容...")).toBeInTheDocument();
+    expect(within(imageGroup).getByLabelText("图片局部对话输入框").tagName).toBe("TEXTAREA");
     const editorLabel = within(imageGroup).getByText(/^编辑区 \(\d+\)$/);
     const generatedLabel = within(imageGroup).getByText(/^生成结果 \(\d+\)$/);
     const imageComposer = within(imageGroup).getByLabelText("图片局部对话输入框");
@@ -128,16 +124,14 @@ describe("content creation feature", () => {
       throw new Error("candidate group not found");
     }
     await user.click(within(candidateGroup).getByRole("button", { name: "生成总结" }));
-    expect(screen.getByRole("button", { name: "选题" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "创作" })).toHaveAttribute("aria-pressed", "true");
 
     await user.click(screen.getByRole("button", { name: "对话" }));
     expect(
-      await screen.findByText("请基于当前已选帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。")
+      await screen.findByText("请基于当前保留帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。")
     ).toBeInTheDocument();
 
-    // 切换到"创作" tab 查看文案
     await user.click(screen.getByRole("button", { name: "创作" }));
-
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
     if (!(copyGroup instanceof HTMLElement)) {
@@ -149,7 +143,7 @@ describe("content creation feature", () => {
 
     await user.click(screen.getByRole("button", { name: "对话" }));
     expect(
-      await screen.findByText("请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。")
+      await screen.findByText("请基于当前保留帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。")
     ).toBeInTheDocument();
   });
 
@@ -157,7 +151,6 @@ describe("content creation feature", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: "创作" }));
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
     if (!(copyGroup instanceof HTMLElement)) {
@@ -175,11 +168,34 @@ describe("content creation feature", () => {
     expect(editor).toHaveClass("overflow-y-auto");
   });
 
+  it("removes the old materials section and uploads local images inside the image section", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderWorkspace();
+
+    expect(screen.queryByRole("button", { name: "展开素材" })).not.toBeInTheDocument();
+
+    const imageToggle = screen.getByRole("button", { name: "展开图片" });
+    const imageGroup = imageToggle.closest("section");
+    if (!(imageGroup instanceof HTMLElement)) {
+      throw new Error("image group not found");
+    }
+    await user.click(imageToggle);
+    expect(within(imageGroup).getByRole("button", { name: "上传图片" })).toBeInTheDocument();
+
+    const fileInput = container.querySelector("input[type='file']");
+    if (!(fileInput instanceof HTMLInputElement)) {
+      throw new Error("file input not found");
+    }
+    const file = new File(["mock-image"], "reference.png", { type: "image/png" });
+    await user.upload(fileInput, file);
+
+    expect(await within(imageGroup).findByRole("img", { name: "上传素材" })).toBeInTheDocument();
+  });
+
   it("keeps the polish prompt open after focusing its input", async () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: "创作" }));
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
     if (!(copyGroup instanceof HTMLElement)) {
@@ -231,8 +247,6 @@ describe("content creation feature", () => {
     );
 
     await screen.findByTestId("workspace-main-panel");
-    await user.click(screen.getByRole("button", { name: "创作" }));
-
     const copyToggle = screen.getByRole("button", { name: "展开文案" });
     const copyGroup = copyToggle.closest("section");
     if (!(copyGroup instanceof HTMLElement)) {
@@ -240,38 +254,81 @@ describe("content creation feature", () => {
     }
     await user.click(copyToggle);
 
-    expect(within(copyGroup).getByText("当前文案")).toBeInTheDocument();
+    expect(within(copyGroup).queryByText("当前文案")).not.toBeInTheDocument();
     expect(within(copyGroup).getByLabelText("文案正文编辑器")).toBeInTheDocument();
   });
 
   it("sends scoped messages from the search and image sections while staying on the current tab", async () => {
     const user = userEvent.setup();
-    await renderWorkspace();
+    const originalFetch = globalThis.fetch;
+    const pendingStreamResolvers: Array<() => void> = [];
+    globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url =
+        typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const path = new URL(url, "http://127.0.0.1:8000").pathname;
+      if (path.endsWith("/runs/stream")) {
+        return new Promise<Response>((resolve) => {
+          pendingStreamResolvers.push(() => {
+            void Promise.resolve(originalFetch(input, init)).then(resolve);
+          });
+        });
+      }
+      return originalFetch(input, init);
+    }) as typeof fetch;
+    try {
+      await renderWorkspace();
 
-    const candidateToggle = screen.getByRole("button", { name: /搜索结果/ });
-    const candidateGroup = candidateToggle.closest("section");
-    if (!(candidateGroup instanceof HTMLElement)) {
-      throw new Error("candidate group not found");
+      const candidateToggle = screen.getByRole("button", { name: /搜索结果/ });
+      const candidateGroup = candidateToggle.closest("section");
+      if (!(candidateGroup instanceof HTMLElement)) {
+        throw new Error("candidate group not found");
+      }
+      await user.type(
+        within(candidateGroup).getByLabelText("搜索结果局部对话输入框"),
+        "继续搜一些类似内容{shift>}{enter}{/shift}并且把标题方向扩一轮"
+      );
+      expect(within(candidateGroup).getByLabelText("搜索结果局部对话输入框").tagName).toBe("TEXTAREA");
+      await user.click(within(candidateGroup).getByRole("button", { name: "发送" }));
+      expect(within(candidateGroup).getByLabelText("搜索结果局部对话输入框")).toHaveValue(
+        "正在搜索..."
+      );
+      expect(within(candidateGroup).getByLabelText("搜索结果局部对话输入框")).toBeDisabled();
+      expect(screen.getByRole("button", { name: "创作" })).toHaveAttribute("aria-pressed", "true");
+      pendingStreamResolvers.shift()?.();
+      await waitFor(() =>
+        expect(within(candidateGroup).getByLabelText("搜索结果局部对话输入框")).toHaveValue("")
+      );
+
+      await user.click(screen.getByRole("button", { name: "对话" }));
+      expect((await screen.findAllByText(/继续搜一些类似内容/)).length).toBeGreaterThan(0);
+
+      await user.click(screen.getByRole("button", { name: "创作" }));
+      const imageToggle = screen.getByRole("button", { name: "展开图片" });
+      const imageGroup = imageToggle.closest("section");
+      if (!(imageGroup instanceof HTMLElement)) {
+        throw new Error("image group not found");
+      }
+      await user.click(imageToggle);
+      await user.type(
+        within(imageGroup).getByLabelText("图片局部对话输入框"),
+        "参考1号图再生成一张{shift>}{enter}{/shift}主体换成更轻一点的构图"
+      );
+      expect(within(imageGroup).getByLabelText("图片局部对话输入框").tagName).toBe("TEXTAREA");
+      await user.click(within(imageGroup).getByRole("button", { name: "发送" }));
+      expect(within(imageGroup).getByLabelText("图片局部对话输入框")).toHaveValue(
+        "图片正在生成..."
+      );
+      expect(within(imageGroup).getByLabelText("图片局部对话输入框")).toBeDisabled();
+      expect(screen.getByRole("button", { name: "创作" })).toHaveAttribute("aria-pressed", "true");
+      pendingStreamResolvers.shift()?.();
+      await waitFor(() =>
+        expect(within(imageGroup).getByLabelText("图片局部对话输入框")).toHaveValue("")
+      );
+
+      await user.click(screen.getByRole("button", { name: "对话" }));
+      expect((await screen.findAllByText(/参考1号图再生成一张/)).length).toBeGreaterThan(0);
+    } finally {
+      globalThis.fetch = originalFetch;
     }
-    await user.type(within(candidateGroup).getByLabelText("搜索结果局部对话输入框"), "继续搜一些类似内容");
-    await user.click(within(candidateGroup).getByRole("button", { name: "发送" }));
-    expect(screen.getByRole("button", { name: "选题" })).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(screen.getByRole("button", { name: "对话" }));
-    expect(await screen.findByText("继续搜一些类似内容")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "创作" }));
-    const imageToggle = screen.getByRole("button", { name: "展开图片" });
-    const imageGroup = imageToggle.closest("section");
-    if (!(imageGroup instanceof HTMLElement)) {
-      throw new Error("image group not found");
-    }
-    await user.click(imageToggle);
-    await user.type(within(imageGroup).getByLabelText("图片局部对话输入框"), "参考1号图再生成一张");
-    await user.click(within(imageGroup).getByRole("button", { name: "发送" }));
-    expect(screen.getByRole("button", { name: "创作" })).toHaveAttribute("aria-pressed", "true");
-
-    await user.click(screen.getByRole("button", { name: "对话" }));
-    expect(await screen.findByText("参考1号图再生成一张")).toBeInTheDocument();
   });
 });

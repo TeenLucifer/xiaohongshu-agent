@@ -63,6 +63,7 @@ let copyDraftStore = JSON.parse(JSON.stringify(mockCopyDraftByTopicId)) as Recor
   string,
   typeof mockCopyDraftByTopicId[string] | null
 >;
+let materialsStore = {} as Record<string, Array<Record<string, unknown>>>;
 let editorImagesStore = {} as Record<string, Array<Record<string, unknown>>>;
 let imageResultsStore = JSON.parse(JSON.stringify(mockImageResultsByTopicId)) as Record<
   string,
@@ -109,6 +110,7 @@ beforeEach(() => {
     string,
     typeof mockCopyDraftByTopicId[string] | null
   >;
+  materialsStore = {};
   editorImagesStore = {};
   imageResultsStore = JSON.parse(JSON.stringify(mockImageResultsByTopicId)) as Record<
     string,
@@ -184,7 +186,7 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
     );
   }
 
-  if (path.startsWith("/api/topics/") && init?.method === "DELETE") {
+  if (/^\/api\/topics\/[^/]+$/.test(path) && init?.method === "DELETE") {
     const deletingTopicId = path.split("/")[3] ?? "";
     topicStore = topicStore.filter((item) => item.id !== deletingTopicId);
     return new Response(
@@ -235,43 +237,13 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
       JSON.stringify({
         topic_id: topicId,
         topic_title: requestUrl.searchParams.get("topic_title") ?? topic.title,
+        materials: materialsStore[topicId] ?? [],
         candidate_posts: candidatePostStore[topicId] ?? [],
         pattern_summary: patternSummaryStore[topicId] ?? null,
         copy_draft: copyDraftStore[topicId] ?? null,
         editor_images: editorImagesStore[topicId] ?? [],
         image_results: imageResultsStore[topicId] ?? [],
         updated_at: "2026-03-29T10:00:00+08:00"
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      }
-    );
-  }
-
-  if (path.endsWith("/selected-posts") && init?.method === "PUT") {
-    const rawBody = init.body;
-    const parsedBody =
-      typeof rawBody === "string"
-        ? (JSON.parse(rawBody) as { post_ids?: string[] })
-        : {};
-    const selectedIds = parsedBody.post_ids ?? [];
-    const orderIndex = new Map(selectedIds.map((postId, index) => [postId, index + 1]));
-    const currentPosts = candidatePostStore[topicId] ?? [];
-    candidatePostStore[topicId] = currentPosts.map((post) => ({
-      ...post,
-      selected: orderIndex.has(post.id),
-      manualOrder: orderIndex.get(post.id) ?? null,
-    }));
-    return new Response(
-      JSON.stringify({
-        topic_id: topicId,
-        topic_title: topic.title,
-        items: selectedIds.map((postId, index) => ({
-          post_id: postId,
-          manual_order: index + 1,
-        })),
-        updated_at: "2026-03-29T10:00:30+08:00",
       }),
       {
         status: 200,
@@ -287,6 +259,103 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         topic_title: topic.title,
         items: editorImagesStore[topicId] ?? [],
         updated_at: "2026-03-29T10:00:30+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.endsWith("/materials") && (init?.method === undefined || init.method === "GET")) {
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        items: materialsStore[topicId] ?? [],
+        updated_at: "2026-03-29T10:00:20+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.endsWith("/materials/text") && init?.method === "POST") {
+    const rawBody = init.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as { title?: string; text_content?: string; textContent?: string })
+        : {};
+    const nextItem = {
+      id: `material-text-${Date.now()}`,
+      type: "text",
+      title: parsedBody.title ?? "",
+      textContent: parsedBody.text_content ?? parsedBody.textContent ?? "",
+      createdAt: "2026-03-29T10:00:21+08:00",
+    };
+    materialsStore[topicId] = [...(materialsStore[topicId] ?? []), nextItem];
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        items: materialsStore[topicId],
+        updated_at: "2026-03-29T10:00:21+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.endsWith("/materials/link") && init?.method === "POST") {
+    const rawBody = init.body;
+    const parsedBody =
+      typeof rawBody === "string"
+        ? (JSON.parse(rawBody) as { title?: string; url?: string })
+        : {};
+    const nextItem = {
+      id: `material-link-${Date.now()}`,
+      type: "link",
+      title: parsedBody.title ?? "",
+      url: parsedBody.url ?? "",
+      createdAt: "2026-03-29T10:00:22+08:00",
+    };
+    materialsStore[topicId] = [...(materialsStore[topicId] ?? []), nextItem];
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        items: materialsStore[topicId],
+        updated_at: "2026-03-29T10:00:22+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.endsWith("/materials/images") && init?.method === "POST") {
+    const nextItems = [
+      {
+        id: `material-image-${Date.now()}`,
+        type: "image",
+        title: "上传素材",
+        imageUrl: `https://example.com/material-${Date.now()}.png`,
+        imagePath: `materials/material-${Date.now()}.png`,
+        createdAt: "2026-03-29T10:00:23+08:00",
+      },
+    ];
+    materialsStore[topicId] = [...(materialsStore[topicId] ?? []), ...nextItems];
+    return new Response(
+      JSON.stringify({
+        topic_id: topicId,
+        topic_title: topic.title,
+        items: materialsStore[topicId],
+        updated_at: "2026-03-29T10:00:23+08:00",
       }),
       {
         status: 200,
@@ -405,6 +474,44 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
     );
   }
 
+  if (path.includes("/materials/") && init?.method === "DELETE") {
+    const pathParts = path.split("/");
+    const materialId = pathParts[pathParts.length - 1] ?? "";
+    materialsStore[topicId] = (materialsStore[topicId] ?? []).filter((item) => item.id !== materialId);
+    editorImagesStore[topicId] = (editorImagesStore[topicId] ?? []).filter(
+      (item) => item.sourceImageId !== materialId && item.source_image_id !== materialId
+    );
+    return new Response(
+      JSON.stringify({
+        deleted_material_id: materialId,
+        updated_at: "2026-03-29T10:00:44+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
+  if (path.includes("/posts/") && init?.method === "DELETE") {
+    const pathParts = path.split("/");
+    const postId = pathParts[pathParts.length - 1] ?? "";
+    candidatePostStore[topicId] = (candidatePostStore[topicId] ?? []).filter((item) => item.id !== postId);
+    editorImagesStore[topicId] = (editorImagesStore[topicId] ?? []).filter(
+      (item) => item.sourcePostId !== postId && item.source_post_id !== postId
+    );
+    return new Response(
+      JSON.stringify({
+        deleted_post_id: postId,
+        updated_at: "2026-03-29T10:00:46+08:00",
+      }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      }
+    );
+  }
+
   if (path.endsWith("/runs")) {
     const rawBody = init?.body;
     const parsedBody =
@@ -412,7 +519,7 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         ? (JSON.parse(rawBody) as { user_input?: string; topic_title?: string })
         : {};
     const userInput = parsedBody.user_input ?? "";
-    if (userInput === "请基于当前已选帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。") {
+    if (userInput === "请基于当前保留帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。") {
       patternSummaryStore[topicId] = {
         titlePatterns: ["场景切入 + 明确收益"],
         bodyPatterns: ["先代入痛点", "再给出公式", "最后强化收藏理由"],
@@ -422,7 +529,7 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
     }
     if (
       userInput ===
-      "请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。"
+      "请基于当前保留帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。"
     ) {
       copyDraftStore[topicId] = {
         title: "早八通勤穿搭别乱买，4 件基础款就够了",
@@ -545,7 +652,7 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
         ? (JSON.parse(rawBody) as { user_input?: string; topic_title?: string })
         : {};
     const userInput = parsedBody.user_input ?? "";
-    if (userInput === "请基于当前已选帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。") {
+    if (userInput === "请基于当前保留帖子，生成一份结构化总结，并写入当前 workspace 的 pattern_summary.json。") {
       patternSummaryStore[topicId] = {
         titlePatterns: ["场景切入 + 明确收益"],
         bodyPatterns: ["先代入痛点", "再给出公式", "最后强化收藏理由"],
@@ -555,7 +662,7 @@ const defaultFetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) 
     }
     if (
       userInput ===
-      "请基于当前已选帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。"
+      "请基于当前保留帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。"
     ) {
       copyDraftStore[topicId] = {
         title: "早八通勤穿搭别乱买，4 件基础款就够了",

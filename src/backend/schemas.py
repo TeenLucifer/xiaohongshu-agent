@@ -12,6 +12,7 @@ from backend.topic_truth_models import (
     CopyDraftRecord,
     EditorImageRecord,
     GeneratedImageResultRecord,
+    MaterialRecord,
     PatternSummaryRecord,
 )
 
@@ -72,11 +73,53 @@ class CreateTopicRequestBody(BaseModel):
     description: str = ""
 
 
-class UpdateSelectedPostsRequestBody(BaseModel):
-    """Request body for persisting selected post ids and order."""
+class CreateTextMaterialRequestBody(BaseModel):
+    """Request body for creating one text material."""
 
-    topic_title: str = Field(min_length=1)
-    post_ids: list[str] = Field(default_factory=list)
+    topic_title: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("topic_title", "topicTitle"),
+    )
+    title: str = ""
+    text_content: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("text_content", "textContent"),
+    )
+
+
+class CreateLinkMaterialRequestBody(BaseModel):
+    """Request body for creating one link material."""
+
+    topic_title: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("topic_title", "topicTitle"),
+    )
+    title: str = ""
+    url: str = Field(min_length=1)
+
+
+class CreateImageMaterialItemRequestBody(BaseModel):
+    """One uploaded image material encoded as base64 payload."""
+
+    filename: str = Field(min_length=1)
+    content_type: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("content_type", "contentType"),
+    )
+    content_base64: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("content_base64", "contentBase64"),
+    )
+
+
+class CreateImageMaterialsRequestBody(BaseModel):
+    """Request body for creating one or more image materials."""
+
+    topic_title: str = Field(
+        min_length=1,
+        validation_alias=AliasChoices("topic_title", "topicTitle"),
+    )
+    items: list[CreateImageMaterialItemRequestBody] = Field(default_factory=list)
 
 
 class UpdateEditorImageItemRequestBody(BaseModel):
@@ -291,8 +334,55 @@ class CandidatePostContextResponse(BaseModel):
     sourceUrl: str
     imageUrl: str
     images: list[CandidatePostImageResponse] = Field(default_factory=list)
-    selected: bool
-    manualOrder: int | None = None
+
+
+class MaterialItemResponse(BaseModel):
+    """Read-only workspace material DTO."""
+
+    id: str
+    type: Literal["text", "image", "link"]
+    title: str = ""
+    textContent: str | None = None
+    url: str | None = None
+    imageUrl: str | None = None
+    imagePath: str | None = None
+    mimeType: str | None = None
+    createdAt: datetime
+
+    @classmethod
+    def from_record(
+        cls,
+        record: MaterialRecord,
+        *,
+        image_url: str | None = None,
+    ) -> MaterialItemResponse:
+        return cls(
+            id=record.id,
+            type=record.type,
+            title=record.title,
+            textContent=record.text_content,
+            url=record.url,
+            imageUrl=image_url,
+            imagePath=record.image_path,
+            mimeType=record.mime_type,
+            createdAt=record.created_at,
+        )
+
+
+class MaterialsResponse(BaseModel):
+    """Response payload for workspace materials."""
+
+    topic_id: str
+    topic_title: str
+    items: list[MaterialItemResponse] = Field(default_factory=list)
+    updated_at: datetime
+
+
+class DeleteMaterialResponse(BaseModel):
+    """Response payload after deleting one material."""
+
+    deleted_material_id: str
+    updated_at: datetime
 
 
 class PatternSummaryContentResponse(BaseModel):
@@ -414,27 +504,12 @@ class WorkspaceContextResponse(BaseModel):
 
     topic_id: str
     topic_title: str
+    materials: list[MaterialItemResponse] = Field(default_factory=list)
     candidate_posts: list[CandidatePostContextResponse] = Field(default_factory=list)
     pattern_summary: PatternSummaryContentResponse | None = None
     copy_draft: CopyDraftContentResponse | None = None
     editor_images: list[EditorImageResponse] = Field(default_factory=list)
     image_results: list[GeneratedImageResultResponse] = Field(default_factory=list)
-    updated_at: datetime
-
-
-class SelectedPostItemResponse(BaseModel):
-    """Minimal persisted selected-post item."""
-
-    post_id: str
-    manual_order: int
-
-
-class SelectedPostsResponse(BaseModel):
-    """Response payload for selected-post persistence."""
-
-    topic_id: str
-    topic_title: str
-    items: list[SelectedPostItemResponse] = Field(default_factory=list)
     updated_at: datetime
 
 
@@ -451,4 +526,11 @@ class DeleteImageResultResponse(BaseModel):
     """Response payload after deleting one generated image result."""
 
     deleted_image_id: str
+    updated_at: datetime
+
+
+class DeleteCandidatePostResponse(BaseModel):
+    """Response payload after deleting one candidate post package."""
+
+    deleted_post_id: str
     updated_at: datetime

@@ -10,38 +10,27 @@ from pydantic import BaseModel, Field, ValidationError
 from agent.errors import PromptConfigError
 
 
-class PromptSectionTitles(BaseModel):
-    memory: str
-    always_skills: str
-    skills_summary: str
+class SystemPromptTemplateConfig(BaseModel):
+    template: str = Field(min_length=1)
+    memory_context_template: str = Field(min_length=1)
+    always_skills_template: str = Field(min_length=1)
+    skills_summary_template: str = Field(min_length=1)
 
 
-class IdentityPromptConfig(BaseModel):
-    title: str
-    rules: list[str] = Field(min_length=1)
-
-
-class RuntimeContextLabels(BaseModel):
-    header: str
-    current_time: str
-    session_id: str
-    workspace_path: str
-    workspace_data_root: str
-    attachments: str
+class UserPromptTemplateConfig(BaseModel):
+    template: str = Field(min_length=1)
+    attachments_template: str = Field(min_length=1)
 
 
 class MemoryPromptConfig(BaseModel):
-    rules_title: str
-    rules: list[str] = Field(min_length=1)
     consolidation_system: str
     consolidation_user_template: str
 
 
 class RuntimePromptConfig(BaseModel):
-    sections: PromptSectionTitles
-    identity: IdentityPromptConfig
+    system: SystemPromptTemplateConfig
+    user: UserPromptTemplateConfig
     memory: MemoryPromptConfig
-    runtime_context: RuntimeContextLabels
 
 
 class RuntimePromptLoader:

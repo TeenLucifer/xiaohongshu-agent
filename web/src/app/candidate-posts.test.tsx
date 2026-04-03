@@ -13,8 +13,17 @@ async function renderWorkspace(): Promise<ReturnType<typeof render>> {
     </MemoryRouter>
   );
   await screen.findByTestId("workspace-main-panel");
-  await screen.findByRole("button", { name: /春日通勤西装 3 套搭法/ });
+  await screen.findByRole("img", { name: "春日通勤西装 3 套搭法 封面图" });
   return view;
+}
+
+function getCandidateCardButton(title: string): HTMLElement {
+  const image = screen.getByRole("img", { name: `${title} 封面图` });
+  const button = image.closest("button");
+  if (!(button instanceof HTMLElement)) {
+    throw new Error(`candidate button not found for ${title}`);
+  }
+  return button;
 }
 
 describe("candidate posts feature", () => {
@@ -35,7 +44,7 @@ describe("candidate posts feature", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: /早八不费力通勤妆 \+ 穿搭/ }));
+    await user.click(getCandidateCardButton("早八不费力通勤妆 + 穿搭"));
 
     const dialog = screen.getByRole("dialog", { name: "早八不费力通勤妆 + 穿搭" });
     expect(within(dialog).getByText(/作者：晨间造型室/)).toBeInTheDocument();
@@ -45,23 +54,19 @@ describe("candidate posts feature", () => {
       expect(screen.queryByRole("dialog", { name: "早八不费力通勤妆 + 穿搭" })).not.toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: /早八不费力通勤妆 \+ 穿搭/ }));
+    await user.click(getCandidateCardButton("早八不费力通勤妆 + 穿搭"));
     await user.click(screen.getByRole("button", { name: "关闭" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "早八不费力通勤妆 + 穿搭" })).not.toBeInTheDocument();
     });
   });
 
-  it("closes the modal when clicking the backdrop and toggles selection inside the modal", async () => {
+  it("closes the modal when clicking the backdrop", async () => {
     const user = userEvent.setup();
     const { container } = await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: /早八不费力通勤妆 \+ 穿搭/ }));
+    await user.click(getCandidateCardButton("早八不费力通勤妆 + 穿搭"));
     const dialog = screen.getByRole("dialog", { name: "早八不费力通勤妆 + 穿搭" });
-
-    await user.click(within(dialog).getByRole("button", { name: "加入已选" }));
-    expect(within(dialog).getByRole("button", { name: "移出已选" })).toBeInTheDocument();
-    expect(screen.getByText("3")).toBeInTheDocument();
 
     const backdrop = container.querySelector("[role='presentation']");
     if (!(backdrop instanceof HTMLElement)) {
@@ -74,19 +79,14 @@ describe("candidate posts feature", () => {
     });
   });
 
-  it("supports manual ordering inside the modal and keeps order markers inline", async () => {
+  it("supports deleting a post from the card hover action", async () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: /低预算通勤衣橱整理术/ }));
-    const dialog = screen.getByRole("dialog", { name: "低预算通勤衣橱整理术" });
-
-    await user.click(within(dialog).getByRole("button", { name: "上移" }));
+    await user.click(screen.getByRole("button", { name: "删除 低预算通勤衣橱整理术" }));
 
     await waitFor(() => {
-      const firstSelectedCard = screen.getByRole("button", { name: /低预算通勤衣橱整理术/ });
-      expect(firstSelectedCard).toBeInTheDocument();
-      expect(screen.queryByRole("list", { name: "已选帖子顺序" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: "低预算通勤衣橱整理术 封面图" })).not.toBeInTheDocument();
     });
   });
 
@@ -94,7 +94,7 @@ describe("candidate posts feature", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: /春日通勤西装 3 套搭法/ }));
+    await user.click(getCandidateCardButton("春日通勤西装 3 套搭法"));
     const dialog = screen.getByRole("dialog", { name: "春日通勤西装 3 套搭法" });
 
     expect(within(dialog).getByRole("img", { name: "候选帖图片 1" })).toBeInTheDocument();
@@ -116,7 +116,7 @@ describe("candidate posts feature", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: /春日通勤西装 3 套搭法/ }));
+    await user.click(getCandidateCardButton("春日通勤西装 3 套搭法"));
     const detailDialog = screen.getByRole("dialog", { name: "春日通勤西装 3 套搭法" });
 
     await user.click(within(detailDialog).getByRole("img", { name: "候选帖图片 1" }));
@@ -136,7 +136,7 @@ describe("candidate posts feature", () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
-    await user.click(screen.getByRole("button", { name: /薄针织 \+ 西裤，通勤一周不重样/ }));
+    await user.click(getCandidateCardButton("薄针织 + 西裤，通勤一周不重样"));
     const dialog = screen.getByRole("dialog", { name: "薄针织 + 西裤，通勤一周不重样" });
 
     expect(within(dialog).getByRole("img", { name: "候选帖图片 1" })).toBeInTheDocument();

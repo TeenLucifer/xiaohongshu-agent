@@ -5,31 +5,40 @@ from __future__ import annotations
 import argparse
 import base64
 import json
-import os
 import sys
 from pathlib import Path
 
-# 尝试加载 .env 文件
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    pass
-
-# 默认配置
+CONFIG_PATH = Path(__file__).resolve().parents[1] / "config.json"
+DEFAULT_VISION_BASE_URL = "https://api.siliconflow.cn/v1"
 DEFAULT_VISION_MODEL = "Qwen/Qwen2.5-VL-32B-Instruct"
 MAX_IMAGES_PER_POST = 5
 
 
-def get_api_config() -> tuple[str, str]:
-    """从环境变量获取 API 配置."""
-    api_key = os.environ.get("OPENAI_API_KEY", "")
-    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.siliconflow.cn/v1")
+def load_skill_config() -> dict[str, str]:
+    """从 skill 本地配置文件获取 API 配置."""
+    if not CONFIG_PATH.exists():
+        raise ValueError(f"缺少 skill 配置文件: {CONFIG_PATH}")
+
+    try:
+        payload = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"skill 配置文件格式错误: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError("skill 配置文件格式错误: 根对象必须是 JSON object")
+
+    api_key = str(payload.get("api_key", "")).strip()
+    base_url = str(payload.get("base_url", DEFAULT_VISION_BASE_URL)).strip()
+    model = str(payload.get("model", DEFAULT_VISION_MODEL)).strip()
 
     if not api_key:
-        raise ValueError("缺少 OPENAI_API_KEY 环境变量")
+        raise ValueError(f"{CONFIG_PATH} 缺少 api_key")
 
-    return api_key, base_url
+    return {
+        "api_key": api_key,
+        "base_url": base_url or DEFAULT_VISION_BASE_URL,
+        "model": model or DEFAULT_VISION_MODEL,
+    }
 
 
 def analyze_images(
@@ -63,18 +72,18 @@ def analyze_images(
 
     # 获取 API 配置
     try:
-        api_key, base_url = get_api_config()
+        config = load_skill_config()
     except ValueError as exc:
         return {"error": str(exc), "post_id": post_id}
 
     # 确定使用的模型
-    vision_model = model or os.environ.get("VISION_MODEL", DEFAULT_VISION_MODEL)
+    vision_model = model or config["model"]
 
     # 调用视觉 API
     try:
         from openai import OpenAI
 
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        client = OpenAI(api_key=config["api_key"], base_url=config["base_url"])
 
         content = [
             {"type": "text", "text": _build_analysis_prompt()},
@@ -142,12 +151,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="分析帖子图片")
     parser.add_argument("--post-id", required=True, help="帖子 ID")
     parser.add_argument("--workspace", required=True, help="Workspace 根目录")
-    parser.add_argument("--model", default=None, help="视觉模型（默认使用 VISION_MODEL 环境变量或 Qwen/Qwen2-VL-7B-Instruct）")
+    parser.add_argument("--model", default=None, help="视觉模型（默认使用 skill 配置中的 model）")
     args = parser.parse_args()
 
     workspace_path = Path(args.workspace)
     if not workspace_path.exists():
-        print(json.dumps({"error": f"Workspace 目录不存在: {args.workspace}", "post_id": args.post_id}, ensure_ascii=False))
+        print(
+            json.dumps(
+                {
+                    "error": f"Workspace 目录不存在: {args.workspace}",
+                    "post_id": args.post_id,
+                },
+                ensure_ascii=False,
+            )
+        )
         return 1
 
     result = analyze_images(

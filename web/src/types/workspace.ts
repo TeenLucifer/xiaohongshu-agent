@@ -1,7 +1,6 @@
 export type SectionStatus = "empty" | "loading" | "success" | "error";
 
 export type WorkspaceSectionId =
-  | "materials"
   | "collector"
   | "candidatePosts"
   | "patternSummary"
@@ -14,13 +13,6 @@ export interface TopicCard {
   title: string;
   description: string;
   updatedAt: string;
-}
-
-export interface TopicMaterialPreview {
-  id: string;
-  type: "image" | "text" | "post_link";
-  label: string;
-  detail: string;
 }
 
 export interface WorkspaceSection {
@@ -45,8 +37,6 @@ export interface CandidatePost {
   sourceUrl: string;
   imageUrl: string;
   images: CandidatePostImage[];
-  selected: boolean;
-  manualOrder: number | null;
 }
 
 export interface CandidatePostImage {
@@ -68,6 +58,18 @@ export interface PatternSummaryContent {
 export interface CopyDraftContent {
   title: string;
   body: string;
+}
+
+export interface MaterialItem {
+  id: string;
+  type: "text" | "image" | "link";
+  title: string;
+  textContent?: string;
+  url?: string;
+  imageUrl?: string;
+  imagePath?: string;
+  mimeType?: string;
+  createdAt: string;
 }
 
 export interface GeneratedImageResult {
@@ -119,14 +121,15 @@ export interface MessageImageAttachment {
   alt: string;
 }
 
-// 素材图片（来自搜索结果）
+// 创作图片区候选图（可能来自上传素材，也可能来自帖子图片）
 export interface MaterialImage {
   id: string;
-  postId: string;
-  postTitle: string;
+  sourceImageId: string;
+  label: string;
   imageUrl: string;
   imagePath: string;
   alt: string;
+  sourcePostId?: string;
 }
 
 // 编辑区图片（用户选择的图片，带编号）

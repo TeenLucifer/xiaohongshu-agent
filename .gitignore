@@ -4,6 +4,7 @@
 
 .env
 .env.*
+skills/*/config.json
 
 .venv/
 .uv-cache/

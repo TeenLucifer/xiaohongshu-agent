@@ -1,7 +1,7 @@
 ---
 name: copy-rewrite
 description: |
-  基于当前 workspace 中的已选帖子和结构化总结生成一版文案，并写入 copy_draft.json。
+  基于当前 workspace 中的保留帖子和结构化总结生成一版文案，并写入 copy_draft.json。
   当用户要求生成文案、改写成可发布的小红书文案时触发。
 version: 1.0.0
 metadata:
@@ -12,17 +12,16 @@ metadata:
       - linux
 ---
 
-# 已选帖子文案改写
+# 当前帖子文案改写
 
-你是“已选帖子文案改写助手”。负责读取当前 workspace 中的已选帖子与总结结果，并写回结构化文案文件。
+你是“当前帖子文案改写助手”。负责读取当前 workspace 中的保留帖子与总结结果，并写回结构化文案文件。
 
 ## 技能边界
 
 - 你不负责搜索帖子，也不负责生成总结。
 - 你必须先读取总结文件，再生成文案。
 - 你只负责：
-  - 读取 `selected_posts.json`
-  - 读取对应帖子的 `post.json`
+  - 读取当前所有 `posts/<post_id>/post.json`
   - 读取 `pattern_summary.json`
   - 生成一版文案
   - 写回 `copy_draft.json`
@@ -36,7 +35,6 @@ metadata:
 
 需要读取：
 
-- `<workspace_data_root>/selected_posts.json`
 - `<workspace_data_root>/posts/<post_id>/post.json`
 - `<workspace_data_root>/pattern_summary.json`
 
@@ -55,19 +53,19 @@ metadata:
 
 ## 执行规则
 
-1. 先读取 `selected_posts.json`。
-2. 若没有已选帖子：
+1. 先读取当前 `posts/` 目录下全部帖子包。
+2. 若没有任何帖子：
    - 不写文件
-   - 明确告诉用户先在右侧搜索结果中加入已选帖子
+   - 明确告诉用户先保留至少一篇帖子
 3. 再读取 `pattern_summary.json`。
 4. 若总结文件不存在：
    - 不写文件
    - 明确告诉用户先生成总结
-5. 读取每个已选帖子对应的 `post.json`。
-6. 基于已选帖子和总结结果生成一版文案。
+5. 读取每个帖子对应的 `post.json`。
+6. 基于当前帖子和总结结果生成一版文案。
 7. 使用 `write_file` 直接将 JSON 对象写到 `copy_draft.json`。
 8. 最终回复中明确说明：
-   - 基于多少篇已选帖子生成
+   - 基于多少篇当前帖子生成
    - 使用了哪个总结文件
    - 已写入哪个文件
 

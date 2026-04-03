@@ -19,8 +19,6 @@ from backend.topic_truth_models import (
     PostMediaAsset,
     PostMetrics,
     PostSource,
-    SelectedPostRecord,
-    SelectedPostsDocument,
     TopicMeta,
 )
 from backend.topic_truth_store import SessionWorkspaceStore
@@ -52,7 +50,7 @@ def test_meta_round_trip(tmp_path: Path) -> None:
     assert loaded == meta
 
 
-def test_candidate_and_selected_posts_round_trip(tmp_path: Path) -> None:
+def test_candidate_posts_round_trip(tmp_path: Path) -> None:
     store = SessionWorkspaceStore(tmp_path / "data")
     now = now_local()
     candidate = CandidatePostRecord(
@@ -63,21 +61,36 @@ def test_candidate_and_selected_posts_round_trip(tmp_path: Path) -> None:
         source_url="https://example.com/post",
         heat=PostHeat(likes=10, favorites=20, comments=3),
         cover_image_path="posts/xhs-1/assets/image-01.jpg",
-        selected=False,
-        manual_order=None,
         updated_at=now,
     )
     candidate_doc = CandidatePostsDocument(items=[candidate], updated_at=now)
-    selected_doc = SelectedPostsDocument(
-        items=[SelectedPostRecord(post_id="xhs-1", manual_order=1)],
-        updated_at=now,
-    )
 
     store.write_candidate_posts("session-demo", candidate_doc)
-    store.write_selected_posts("session-demo", selected_doc)
 
     assert store.read_candidate_posts("session-demo") == candidate_doc
-    assert store.read_selected_posts("session-demo") == selected_doc
+
+
+def test_delete_post_removes_post_root(tmp_path: Path) -> None:
+    store = SessionWorkspaceStore(tmp_path / "data")
+    now = now_local()
+
+    store.write_post_detail(
+        "session-demo",
+        "xhs-1",
+        PostDetail(
+            post_id="xhs-1",
+            title="CLI 正在回归",
+            post_type="image_text",
+            url="https://example.com/post",
+            content=PostContent(text="正文"),
+            metrics=PostMetrics(likes=1, favorites=2, comments=3),
+            updated_at=now,
+        ),
+    )
+
+    assert store.get_post_root("session-demo", "xhs-1").exists()
+    store.delete_post("session-demo", "xhs-1")
+    assert not store.get_post_root("session-demo", "xhs-1").exists()
 
 
 def test_pattern_summary_copy_draft_and_image_results_round_trip(tmp_path: Path) -> None:

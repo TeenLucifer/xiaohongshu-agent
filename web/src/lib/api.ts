@@ -4,6 +4,7 @@ import type {
   CopyDraftContent,
   EditorImage,
   GeneratedImageResult,
+  MaterialItem,
   PatternSummaryContent,
   TopicCard,
 } from "../types/workspace";
@@ -78,11 +79,19 @@ export interface MessagesApiResponse {
 export interface WorkspaceContextApiResponse {
   topic_id: string;
   topic_title: string;
+  materials: MaterialItem[];
   candidate_posts: CandidatePost[];
   pattern_summary: PatternSummaryContent | null;
   copy_draft: CopyDraftContent | null;
   editor_images: EditorImage[];
   image_results: GeneratedImageResult[];
+  updated_at: string;
+}
+
+export interface MaterialsApiResponse {
+  topic_id: string;
+  topic_title: string;
+  items: MaterialItem[];
   updated_at: string;
 }
 
@@ -113,13 +122,13 @@ export interface DeleteImageResultApiResponse {
   updated_at: string;
 }
 
-export interface SelectedPostsApiResponse {
-  topic_id: string;
-  topic_title: string;
-  items: Array<{
-    post_id: string;
-    manual_order: number;
-  }>;
+export interface DeleteCandidatePostApiResponse {
+  deleted_post_id: string;
+  updated_at: string;
+}
+
+export interface DeleteMaterialApiResponse {
+  deleted_material_id: string;
   updated_at: string;
 }
 
@@ -386,6 +395,10 @@ export async function getWorkspaceContext(
   );
   return {
     ...response,
+    materials: (response.materials ?? []).map((item) => ({
+      ...item,
+      imageUrl: item.imageUrl ? toAbsoluteApiUrl(item.imageUrl) : undefined,
+    })),
     candidate_posts: response.candidate_posts.map((post) => ({
       ...post,
       imageUrl: toAbsoluteApiUrl(post.imageUrl),
@@ -403,6 +416,122 @@ export async function getWorkspaceContext(
       imageUrl: toAbsoluteApiUrl(image.imageUrl),
     }))
   };
+}
+
+export async function getMaterials(
+  topicId: string,
+  topicTitle: string
+): Promise<MaterialsApiResponse> {
+  const params = new URLSearchParams({ topic_title: topicTitle });
+  const response = await requestJson<MaterialsApiResponse>(
+    `/api/topics/${topicId}/materials?${params.toString()}`
+  );
+  return {
+    ...response,
+    items: (response.items ?? []).map((item) => ({
+      ...item,
+      imageUrl: item.imageUrl ? toAbsoluteApiUrl(item.imageUrl) : undefined,
+    })),
+  };
+}
+
+export async function createTextMaterial(
+  topicId: string,
+  topicTitle: string,
+  payload: { title: string; textContent: string }
+): Promise<MaterialsApiResponse> {
+  return requestJson<MaterialsApiResponse>(`/api/topics/${topicId}/materials/text`, {
+    method: "POST",
+    body: JSON.stringify({
+      topic_title: topicTitle,
+      title: payload.title,
+      text_content: payload.textContent,
+    }),
+  });
+}
+
+export async function createLinkMaterial(
+  topicId: string,
+  topicTitle: string,
+  payload: { title: string; url: string }
+): Promise<MaterialsApiResponse> {
+  return requestJson<MaterialsApiResponse>(`/api/topics/${topicId}/materials/link`, {
+    method: "POST",
+    body: JSON.stringify({
+      topic_title: topicTitle,
+      title: payload.title,
+      url: payload.url,
+    }),
+  });
+}
+
+export async function uploadImageMaterials(
+  topicId: string,
+  topicTitle: string,
+  files: File[]
+): Promise<MaterialsApiResponse> {
+  const items = await Promise.all(
+    files.map(async (file) => ({
+      filename: file.name,
+      content_type: file.type || "image/png",
+      content_base64: await fileToBase64(file),
+    }))
+  );
+  const response = await requestJson<MaterialsApiResponse>(`/api/topics/${topicId}/materials/images`, {
+    method: "POST",
+    body: JSON.stringify({
+      topic_title: topicTitle,
+      items,
+    }),
+  });
+  return {
+    ...response,
+    items: (response.items ?? []).map((item) => ({
+      ...item,
+      imageUrl: item.imageUrl ? toAbsoluteApiUrl(item.imageUrl) : undefined,
+    })),
+  };
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  if (typeof file.arrayBuffer === "function") {
+    const buffer = await file.arrayBuffer();
+    let binary = "";
+    const bytes = new Uint8Array(buffer);
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
+  }
+
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("读取图片素材失败"));
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : "";
+      const encoded = dataUrl.includes(",") ? dataUrl.split(",")[1] : "";
+      if (encoded === "") {
+        reject(new Error("读取图片素材失败"));
+        return;
+      }
+      resolve(encoded);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function deleteMaterial(
+  topicId: string,
+  topicTitle: string,
+  materialId: string
+): Promise<DeleteMaterialApiResponse> {
+  const params = new URLSearchParams({ topic_title: topicTitle });
+  return requestJson<DeleteMaterialApiResponse>(
+    `/api/topics/${topicId}/materials/${materialId}?${params.toString()}`,
+    {
+      method: "DELETE",
+    }
+  );
 }
 
 export async function getEditorImages(
@@ -504,18 +633,18 @@ export async function deleteImageResult(
   );
 }
 
-export async function updateSelectedPosts(
+export async function deleteCandidatePost(
   topicId: string,
   topicTitle: string,
-  postIds: string[]
-): Promise<SelectedPostsApiResponse> {
-  return requestJson<SelectedPostsApiResponse>(`/api/topics/${topicId}/selected-posts`, {
-    method: "PUT",
-    body: JSON.stringify({
-      topic_title: topicTitle,
-      post_ids: postIds
-    })
-  });
+  postId: string
+): Promise<DeleteCandidatePostApiResponse> {
+  const params = new URLSearchParams({ topic_title: topicTitle });
+  return requestJson<DeleteCandidatePostApiResponse>(
+    `/api/topics/${topicId}/posts/${postId}?${params.toString()}`,
+    {
+      method: "DELETE",
+    }
+  );
 }
 
 export async function resetTopic(topicId: string, topicTitle: string): Promise<WorkspaceApiResponse> {

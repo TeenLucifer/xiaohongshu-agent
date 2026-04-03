@@ -1,0 +1,5 @@
+{
+  "api_key": "replace-with-your-vision-api-key",
+  "base_url": "https://api.siliconflow.cn/v1",
+  "model": "Qwen/Qwen2.5-VL-32B-Instruct"
+}
