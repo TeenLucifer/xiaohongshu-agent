@@ -118,6 +118,8 @@ def test_context_builder_builds_system_prompt_in_fixed_order(tmp_path: Path) -> 
     assert "专为小红书调研与内容运营设计的助手 runtime" in prompt
     assert "使用任何 skill 前，应先读取对应的 SKILL.md。" in prompt
     assert "业务细流程和具体输入输出约束以 skill 文档为准" in prompt
+    assert "当用户是在做小红书选题、对标或方向调研时" in prompt
+    assert "小红书调研默认只搜索和分析，不默认下载、不落盘" in prompt
     assert "当前允许访问的目录包括：" in prompt
     assert f"- {tmp_path / 'data' / 'sessions' / 'sess-1'}" in prompt
     assert f"- {tmp_path / 'skills'}" in prompt

@@ -1,6 +1,6 @@
 <div align="center">
 
-# 小红书运营 Agent 工作台
+# 小红书运营 Agent
 
 [![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -9,7 +9,7 @@
 [![TailwindCSS](https://img.shields.io/badge/Tailwind-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![Lexical](https://img.shields.io/badge/Lexical-Editor-black?style=flat-square)](https://lexical.dev/)
 
-围绕一个具体话题，把搜帖、总结、文案、图片创作和对话执行记录收进同一个工作区。
+围绕一个具体话题，把选题、对标、创作收进同一个工作区。
 
 [**核心功能**](#-核心功能介绍) · [**功能展示**](#-动图展示核心功能) · [**框架介绍**](#-框架介绍) · [**部署方式**](#-部署方式) · [**核心模块**](#-核心模块详细介绍)
 
@@ -26,7 +26,7 @@
 ## ✨ 核心功能介绍
 
 ### 🔎 小红书帖子自动化搜集
-围绕一个话题执行发散式搜集，拉取帖子详情并下载标准帖子包。搜索结果直接进入工作区，用户可以删掉无用帖子，剩余结果天然进入后续创作链路。
+围绕一个话题先做发散式调研，查看帖子详情并收窄方向；只有明确要求下载时，才把确认后的帖子写成标准帖子包进入工作区。进入工作区后的帖子可以继续删除，剩余结果天然进入后续创作链路。
 
 ### 🧠 人在回路的文案与图片创作
 基于当前保留帖子生成总结，再进入文案白板继续改写，并在图片区上传参考图、整理编辑区和生成图片。整个过程保留人工判断，Agent 负责执行重复性分析、改写和生成动作。
@@ -44,7 +44,7 @@
 <h3>🔎 小红书帖子自动化搜集</h3>
 <img src="assets/readme/search-and-summary.gif" alt="搜索结果与总结" width="100%">
 <br>
-<sub>发散搜集帖子、获取详情、落盘帖子包，并在工作区中删除无用结果</sub>
+<sub>先发散调研帖子并获取详情，确认后再落盘帖子包，并在工作区中删除无用结果</sub>
 
 </td>
 </tr>
@@ -91,7 +91,7 @@
 产品以“话题”为工作单元。当前界面收口为 `创作 / 对话` 两个 tab，其中 `创作` 负责把“帖子自动化搜集”与“人在回路创作”串在一起，`对话` 统一承接交互结果与执行反馈。
 
 ### 🤖 Agent 与 Skills 层
-系统采用“一个主 Agent + 多个业务 Skills”的组织方式。一组技能负责小红书帖子搜集、详情获取和帖子包落盘，另一组技能负责总结、文案改写、图片分析、图片生成与选区润色。
+系统采用“一个主 Agent + 多个业务 Skills”的组织方式。runtime 会用简短提示词定义小红书调研原则：调研时优先贴合 user input，默认只搜索和分析，不默认下载。具体的小红书搜索、详情获取和帖子包落盘分别由对应 skill 承接，另一组技能负责总结、文案改写、图片分析、图片生成与选区润色。
 
 ### 💾 后端与数据层
 后端负责 topic/session 映射、run 调用、流式输出和 workspace 文件化存储。帖子包、总结、文案和图片结果都统一落在当前 session workspace 中，前端再从同一个 context 中读取和展示。

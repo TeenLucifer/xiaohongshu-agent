@@ -478,7 +478,7 @@ def _resolve_trace_mode(explicit_mode: AppTraceMode | None) -> TraceMode | None:
         return cast(TraceMode, raw_mode)
 
     environment = os.getenv("XHS_ENV", os.getenv("ENV", "development")).strip().lower()
-    return None if environment == "production" else "full"
+    return None if environment == "production" else "summary"
 
 
 app = create_app()

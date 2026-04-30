@@ -192,7 +192,7 @@ describe("content creation feature", () => {
     expect(await within(imageGroup).findByRole("img", { name: "上传素材" })).toBeInTheDocument();
   });
 
-  it("keeps the polish prompt open after focusing its input", async () => {
+  it("shows the polish input only after the text selection gesture ends", async () => {
     const user = userEvent.setup();
     await renderWorkspace();
 
@@ -223,16 +223,95 @@ describe("content creation feature", () => {
     selection.addRange(range);
     document.dispatchEvent(new Event("selectionchange"));
 
-    const polishButton = await screen.findByRole("button", { name: "AI 润色" });
-    await user.click(polishButton);
+    expect(screen.queryByLabelText("润色要求")).not.toBeInTheDocument();
+
+    fireEvent.mouseUp(heading);
 
     const instructionInput = await screen.findByLabelText("润色要求");
     await user.click(instructionInput);
 
-    expect(screen.getByText("润色已选内容")).toBeInTheDocument();
     expect(screen.getByLabelText("润色要求")).toBeInTheDocument();
+    expect(screen.queryByText("润色已选内容")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "AI 润色" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "取消" })).not.toBeInTheDocument();
+  });
 
+  it("dismisses the polish input when clicking outside", async () => {
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    const copyToggle = screen.getByRole("button", { name: "展开文案" });
+    const copyGroup = copyToggle.closest("section");
+    if (!(copyGroup instanceof HTMLElement)) {
+      throw new Error("copy group not found");
+    }
+    await user.click(copyToggle);
+
+    const heading = await within(copyGroup).findByRole("heading", {
+      level: 1,
+      name: "通勤穿搭别再乱买了，4 件基础单品就够用",
+    });
+    const textNode = findFirstTextNode(heading);
+    if (textNode === null) {
+      throw new Error("heading text node not found");
+    }
+
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, 6);
+    const selection = window.getSelection();
+    if (selection === null) {
+      throw new Error("selection not available");
+    }
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+
+    expect(screen.queryByLabelText("润色要求")).not.toBeInTheDocument();
     fireEvent.mouseUp(heading);
+    expect(await screen.findByLabelText("润色要求")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("heading", { name: "春季通勤穿搭", level: 1 }));
+    expect(screen.queryByLabelText("润色要求")).not.toBeInTheDocument();
+  });
+
+  it("dismisses the polish input when pressing escape", async () => {
+    const user = userEvent.setup();
+    await renderWorkspace();
+
+    const copyToggle = screen.getByRole("button", { name: "展开文案" });
+    const copyGroup = copyToggle.closest("section");
+    if (!(copyGroup instanceof HTMLElement)) {
+      throw new Error("copy group not found");
+    }
+    await user.click(copyToggle);
+
+    const heading = await within(copyGroup).findByRole("heading", {
+      level: 1,
+      name: "通勤穿搭别再乱买了，4 件基础单品就够用",
+    });
+    const textNode = findFirstTextNode(heading);
+    if (textNode === null) {
+      throw new Error("heading text node not found");
+    }
+
+    const range = document.createRange();
+    range.setStart(textNode, 0);
+    range.setEnd(textNode, 6);
+    const selection = window.getSelection();
+    if (selection === null) {
+      throw new Error("selection not available");
+    }
+    selection.removeAllRanges();
+    selection.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+
+    expect(screen.queryByLabelText("润色要求")).not.toBeInTheDocument();
+    fireEvent.keyUp(heading, { key: "Shift" });
+    expect(await screen.findByLabelText("润色要求")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByLabelText("润色要求")).not.toBeInTheDocument();
   });
 
   it("shows an editable copy draft panel even when no draft exists yet", async () => {

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
@@ -92,5 +92,57 @@ describe("conversation timeline feature", () => {
       value: originalScrollTo,
     });
     fetchSpy.mockRestore();
+  });
+
+  it("shows a jump-to-bottom button after the user scrolls up and avoids forced auto-scroll", async () => {
+    const user = userEvent.setup();
+    const originalScrollTo = HTMLElement.prototype.scrollTo;
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: scrollToSpy,
+    });
+
+    await renderWorkspace();
+
+    const scrollContainer = screen.getByTestId("conversation-scroll-container");
+    Object.defineProperty(scrollContainer, "scrollHeight", {
+      configurable: true,
+      value: 1200,
+    });
+    Object.defineProperty(scrollContainer, "clientHeight", {
+      configurable: true,
+      value: 400,
+    });
+    Object.defineProperty(scrollContainer, "scrollTop", {
+      configurable: true,
+      writable: true,
+      value: 500,
+    });
+
+    fireEvent.scroll(scrollContainer);
+
+    expect(await screen.findByRole("button", { name: "跳转到底部" })).toBeInTheDocument();
+
+    scrollToSpy.mockClear();
+    const composer = screen.getByLabelText("对话输入框");
+    await user.type(composer, "继续补充一轮帖子");
+    await user.click(screen.getByRole("button", { name: "发送消息" }));
+
+    expect(await screen.findByText("继续补充一轮帖子")).toBeInTheDocument();
+    expect(scrollToSpy).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "跳转到底部" }));
+
+    expect(scrollToSpy).toHaveBeenCalled();
+    expect(scrollToSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ behavior: "smooth" })
+    );
+    expect(screen.queryByRole("button", { name: "跳转到底部" })).not.toBeInTheDocument();
+
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+      configurable: true,
+      value: originalScrollTo,
+    });
   });
 });

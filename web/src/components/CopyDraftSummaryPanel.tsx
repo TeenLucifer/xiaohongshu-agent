@@ -164,75 +164,141 @@ function SelectionPolishPlugin({
 }): JSX.Element | null {
   const [editor] = useLexicalComposerContext();
   const [selectionText, setSelectionText] = useState("");
-  const [buttonPosition, setButtonPosition] = useState<{ top: number; left: number } | null>(null);
+  const [promptPosition, setPromptPosition] = useState<{ top: number; left: number } | null>(null);
   const [isPromptOpen, setIsPromptOpen] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPolishing, setIsPolishing] = useState(false);
   const selectionRef = useRef<RangeSelection | null>(null);
+  const promptRef = useRef<HTMLDivElement | null>(null);
+  const dismissedSelectionTokenRef = useRef<string | null>(null);
+  const pendingOpenTimerRef = useRef<number | null>(null);
+
+  const clearPendingOpen = useCallback(() => {
+    if (pendingOpenTimerRef.current !== null) {
+      window.clearTimeout(pendingOpenTimerRef.current);
+      pendingOpenTimerRef.current = null;
+    }
+  }, []);
+
+  const closePrompt = useCallback(
+    (dismissCurrentSelection: boolean) => {
+      if (dismissCurrentSelection && selectionRef.current !== null && selectionText.trim().length > 0) {
+        const storedSelection = selectionRef.current;
+        dismissedSelectionTokenRef.current = [
+          storedSelection.anchor.key,
+          storedSelection.anchor.offset,
+          storedSelection.focus.key,
+          storedSelection.focus.offset,
+          selectionText.trim(),
+        ].join(":");
+      } else if (!dismissCurrentSelection) {
+        dismissedSelectionTokenRef.current = null;
+      }
+
+      clearPendingOpen();
+      setIsPromptOpen(false);
+      setInstruction("");
+      setErrorMessage(null);
+      setPromptPosition(null);
+      setSelectionText("");
+      selectionRef.current = null;
+    },
+    [clearPendingOpen, selectionText]
+  );
+
+  const getSelectionSnapshot = useCallback(() => {
+    const root = editor.getRootElement();
+    const domSelection = window.getSelection();
+    if (root === null || domSelection === null || domSelection.rangeCount === 0 || domSelection.isCollapsed) {
+      return null;
+    }
+
+    const range = domSelection.getRangeAt(0);
+    const commonNode = range.commonAncestorContainer;
+    const container = commonNode instanceof Element ? commonNode : commonNode.parentElement;
+    if (container === null || !root.contains(container)) {
+      return null;
+    }
+
+    return editor.getEditorState().read(() => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection) || selection.isCollapsed()) {
+        return null;
+      }
+
+      const nextText = selection.getTextContent().trim();
+      if (nextText.length === 0) {
+        return null;
+      }
+
+      return {
+        selection: selection.clone(),
+        text: nextText,
+        token: [
+        selection.anchor.key,
+        selection.anchor.offset,
+        selection.focus.key,
+        selection.focus.offset,
+        nextText,
+        ].join(":"),
+        position: {
+          top: Math.max(16, range.getBoundingClientRect().top - 56),
+          left: Math.max(16, range.getBoundingClientRect().left + range.getBoundingClientRect().width / 2 - 176),
+        },
+      };
+    });
+  }, [editor]);
 
   const syncSelectionState = useCallback(() => {
-      if (isPromptOpen) {
+    if (isPromptOpen) {
+      return;
+    }
+
+    const snapshot = getSelectionSnapshot();
+    if (snapshot === null) {
+      clearPendingOpen();
+      setSelectionText("");
+      setPromptPosition(null);
+      if (!isPolishing) {
+        setIsPromptOpen(false);
+      }
+      return;
+    }
+
+    if (dismissedSelectionTokenRef.current === snapshot.token) {
+      clearPendingOpen();
+      setSelectionText("");
+      setPromptPosition(null);
+      setIsPromptOpen(false);
+      return;
+    }
+
+    selectionRef.current = snapshot.selection;
+    setSelectionText(snapshot.text);
+    setPromptPosition(snapshot.position);
+  }, [clearPendingOpen, getSelectionSnapshot, isPolishing, isPromptOpen]);
+
+  const schedulePromptOpen = useCallback(() => {
+    if (isPromptOpen) {
+      return;
+    }
+
+    clearPendingOpen();
+    pendingOpenTimerRef.current = window.setTimeout(() => {
+      const snapshot = getSelectionSnapshot();
+      pendingOpenTimerRef.current = null;
+      if (snapshot === null || dismissedSelectionTokenRef.current === snapshot.token) {
         return;
       }
-      const root = editor.getRootElement();
-      const domSelection = window.getSelection();
-      if (
-        root === null ||
-        domSelection === null ||
-        domSelection.rangeCount === 0 ||
-        domSelection.isCollapsed
-      ) {
-        setSelectionText("");
-        setButtonPosition(null);
-        if (!isPolishing) {
-          setIsPromptOpen(false);
-        }
-        return;
-      }
 
-      const range = domSelection.getRangeAt(0);
-      const commonNode = range.commonAncestorContainer;
-      const container = commonNode instanceof Element ? commonNode : commonNode.parentElement;
-      if (container === null || !root.contains(container)) {
-        setSelectionText("");
-        setButtonPosition(null);
-        if (!isPolishing) {
-          setIsPromptOpen(false);
-        }
-        return;
-      }
-
-      editor.getEditorState().read(() => {
-        const selection = $getSelection();
-        if (!$isRangeSelection(selection) || selection.isCollapsed()) {
-          setSelectionText("");
-          setButtonPosition(null);
-          if (!isPolishing) {
-            setIsPromptOpen(false);
-          }
-          return;
-        }
-
-        const nextText = selection.getTextContent().trim();
-        if (nextText.length === 0) {
-          setSelectionText("");
-          setButtonPosition(null);
-          if (!isPolishing) {
-            setIsPromptOpen(false);
-          }
-          return;
-        }
-
-        selectionRef.current = selection.clone();
-        setSelectionText(nextText);
-        const rect = range.getBoundingClientRect();
-        setButtonPosition({
-          top: Math.max(16, rect.top - 48),
-          left: Math.max(16, rect.left + rect.width / 2 - 48),
-        });
-      });
-    }, [editor, isPolishing, isPromptOpen]);
+      dismissedSelectionTokenRef.current = null;
+      selectionRef.current = snapshot.selection;
+      setSelectionText(snapshot.text);
+      setPromptPosition(snapshot.position);
+      setIsPromptOpen(true);
+    }, 150);
+  }, [clearPendingOpen, getSelectionSnapshot, isPromptOpen]);
 
   useEffect(() => {
     const root = editor.getRootElement();
@@ -241,6 +307,9 @@ function SelectionPolishPlugin({
     }
     const handleSelectionChange = () => {
       syncSelectionState();
+    };
+    const handleSelectionEnd = () => {
+      schedulePromptOpen();
     };
     return mergeRegister(
       editor.registerCommand(
@@ -256,17 +325,53 @@ function SelectionPolishPlugin({
       }),
       () => {
         document.removeEventListener("selectionchange", handleSelectionChange);
-        root.removeEventListener("mouseup", handleSelectionChange);
-        root.removeEventListener("keyup", handleSelectionChange);
+        root.removeEventListener("mouseup", handleSelectionEnd);
+        root.removeEventListener("touchend", handleSelectionEnd);
+        root.removeEventListener("keyup", handleSelectionEnd);
       },
       (() => {
         document.addEventListener("selectionchange", handleSelectionChange);
-        root.addEventListener("mouseup", handleSelectionChange);
-        root.addEventListener("keyup", handleSelectionChange);
+        root.addEventListener("mouseup", handleSelectionEnd);
+        root.addEventListener("touchend", handleSelectionEnd);
+        root.addEventListener("keyup", handleSelectionEnd);
         return () => {};
       })()
     );
-  }, [editor, syncSelectionState]);
+  }, [editor, schedulePromptOpen, syncSelectionState]);
+
+  useEffect(() => {
+    return () => {
+      clearPendingOpen();
+    };
+  }, [clearPendingOpen]);
+
+  useEffect(() => {
+    if (!isPromptOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target;
+      if (promptRef.current !== null && target instanceof Node && promptRef.current.contains(target)) {
+        return;
+      }
+      closePrompt(true);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePrompt(true);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closePrompt, isPromptOpen]);
 
   async function handlePolishSubmit(): Promise<void> {
     const normalizedInstruction = instruction.trim();
@@ -300,11 +405,7 @@ function SelectionPolishPlugin({
           currentSelection.insertText(result.replacementText);
         }
       });
-      setInstruction("");
-      setSelectionText("");
-      setButtonPosition(null);
-      setIsPromptOpen(false);
-      selectionRef.current = null;
+      closePrompt(false);
       window.requestAnimationFrame(() => {
         const selection = window.getSelection();
         if (selection === null || selection.rangeCount === 0) {
@@ -323,81 +424,43 @@ function SelectionPolishPlugin({
     }
   }
 
-  if (buttonPosition === null || selectionText.length === 0) {
+  if (!isPromptOpen || promptPosition === null || selectionText.length === 0) {
     return null;
   }
 
   return (
-    <>
-      <div
-        className="fixed z-40"
-        style={{
-          left: `${buttonPosition.left}px`,
-          top: `${buttonPosition.top}px`,
-        }}
-      >
-        <Button
-          onMouseDown={(event) => {
-            event.preventDefault();
-          }}
-          onClick={() => {
-            setIsPromptOpen(true);
-            setErrorMessage(null);
-          }}
-          size="sm"
-          type="button"
-          variant="primary"
-        >
-          AI 润色
-        </Button>
-      </div>
-
-      {isPromptOpen ? (
-        <div
-          className="fixed z-50 w-[320px] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl"
-          style={{
-            left: `${Math.max(16, buttonPosition.left - 80)}px`,
-            top: `${buttonPosition.top + 44}px`,
-          }}
-        >
-          <p className="text-sm font-semibold text-slate-900">润色已选内容</p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">当前只会替换选中的这段文本，不改其它内容。</p>
-          <p className="mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs leading-5 text-slate-600">
-            {selectionText}
-          </p>
-          <label className="mt-3 block text-xs font-medium text-slate-500" htmlFor="selection-polish-instruction">
-            润色要求
-          </label>
-          <textarea
-            className="mt-1 min-h-[88px] w-full rounded-xl border border-slate-200 px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+    <div
+      className="fixed z-50 w-[352px]"
+      ref={promptRef}
+      style={{
+        left: `${promptPosition.left}px`,
+        top: `${promptPosition.top}px`,
+      }}
+    >
+      <div className="rounded-full border border-slate-200 bg-white px-2 py-2 shadow-[0_16px_36px_rgba(15,23,42,0.12)]">
+        <div className="flex items-center gap-2">
+          <input
+            aria-label="润色要求"
+            className="h-9 flex-1 rounded-full border-0 bg-transparent px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400"
             id="selection-polish-instruction"
             onChange={(event) => setInstruction(event.target.value)}
-            placeholder="例如：更口语一点，保留原意，节奏更短促"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void handlePolishSubmit();
+              }
+            }}
+            placeholder="输入本次润色要求..."
+            type="text"
             value={instruction}
           />
-          {errorMessage ? (
-            <p className="mt-2 text-xs text-rose-500">{errorMessage}</p>
-          ) : null}
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <Button
-              onClick={() => {
-                setIsPromptOpen(false);
-                setInstruction("");
-                setErrorMessage(null);
-              }}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              取消
-            </Button>
-            <Button disabled={isPolishing} onClick={() => void handlePolishSubmit()} size="sm" type="button" variant="primary">
-              {isPolishing ? "润色中..." : "开始润色"}
-            </Button>
-          </div>
+          <Button disabled={isPolishing} onClick={() => void handlePolishSubmit()} size="sm" type="button" variant="primary">
+            {isPolishing ? "润色中..." : "润色"}
+          </Button>
         </div>
-      ) : null}
-    </>
+        {errorMessage ? <p className="px-3 pt-2 text-xs text-rose-500">{errorMessage}</p> : null}
+      </div>
+    </div>
   );
 }
 

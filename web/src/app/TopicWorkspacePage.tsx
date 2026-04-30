@@ -61,6 +61,8 @@ const GENERATE_PATTERN_SUMMARY_PROMPT =
 const GENERATE_COPY_DRAFT_PROMPT =
   "请基于当前保留帖子和当前 workspace 中的 pattern_summary.json，生成一版文案，并写入当前 workspace 的 copy_draft.json。";
 
+const CONVERSATION_BOTTOM_THRESHOLD = 80;
+
 function InlineRunComposer({
   ariaLabel,
   busyText,
@@ -214,10 +216,32 @@ export function TopicWorkspacePage(): JSX.Element {
   const [isDeletingTopic, setIsDeletingTopic] = useState(false);
   const [messagesError, setMessagesError] = useState<string | null>(null);
   const [activeContextTab, setActiveContextTab] = useState<"创作" | "对话">("创作");
+  const [isConversationNearBottom, setIsConversationNearBottom] = useState(true);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const copyDraftSaveTimerRef = useRef<number | null>(null);
   const conversationComposerRef = useRef<HTMLTextAreaElement | null>(null);
   const [isCopyDraftSaving, setIsCopyDraftSaving] = useState(false);
+
+  function isScrolledNearBottom(container: HTMLDivElement): boolean {
+    return (
+      container.scrollHeight - container.scrollTop - container.clientHeight <=
+      CONVERSATION_BOTTOM_THRESHOLD
+    );
+  }
+
+  function scrollConversationToBottom(behavior: ScrollBehavior = "auto"): void {
+    const container = timelineScrollRef.current;
+    if (container === null) {
+      return;
+    }
+    const targetTop = container.scrollHeight;
+    if (behavior === "smooth" && typeof container.scrollTo === "function") {
+      container.scrollTo({ top: targetTop, behavior });
+    } else {
+      container.scrollTop = targetTop;
+    }
+    setIsConversationNearBottom(true);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -288,19 +312,24 @@ export function TopicWorkspacePage(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    const container = timelineScrollRef.current;
-    if (container === null) {
+    if (activeContextTab !== "对话" || !isConversationNearBottom) {
       return;
     }
     const frame = window.requestAnimationFrame(() => {
-      const targetTop = container.scrollHeight;
-      container.scrollTop = targetTop;
-      if (typeof container.scrollTo === "function") {
-        container.scrollTo({ top: targetTop, behavior: "smooth" });
-      }
+      scrollConversationToBottom("smooth");
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages]);
+  }, [activeContextTab, isConversationNearBottom, messages]);
+
+  useEffect(() => {
+    if (activeContextTab !== "对话") {
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      scrollConversationToBottom("auto");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [activeContextTab, topicId]);
 
   useLayoutEffect(() => {
     const element = conversationComposerRef.current;
@@ -880,6 +909,14 @@ export function TopicWorkspacePage(): JSX.Element {
             >
               <div
                 className="scrollbar-subtle min-h-0 flex-1 overflow-y-auto pr-1"
+                data-testid="conversation-scroll-container"
+                onScroll={(event) => {
+                  const container = event.currentTarget;
+                  const nearBottom = isScrolledNearBottom(container);
+                  setIsConversationNearBottom((current) =>
+                    current === nearBottom ? current : nearBottom
+                  );
+                }}
                 ref={timelineScrollRef}
               >
                 <div className="mx-auto w-full max-w-[840px]">
@@ -896,6 +933,21 @@ export function TopicWorkspacePage(): JSX.Element {
               </div>
 
               <div className="mx-auto mt-4 w-full max-w-[840px]">
+                <div className="relative">
+                  {!isConversationNearBottom ? (
+                    <button
+                      aria-label="跳转到底部"
+                      className="absolute right-3 -top-14 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-lg transition hover:border-slate-300 hover:text-slate-900"
+                      data-testid="conversation-jump-to-bottom"
+                      onClick={() => {
+                        scrollConversationToBottom("smooth");
+                      }}
+                      type="button"
+                    >
+                      <ChevronDown className="h-4 w-4" strokeWidth={2} />
+                    </button>
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-3 rounded-[24px] border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
                   <textarea
                     aria-label="对话输入框"

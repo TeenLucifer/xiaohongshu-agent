@@ -111,6 +111,16 @@ class EchoTool(Tool):
         return {"keyword": parsed.keyword, "status": "ok"}
 
 
+def test_backend_defaults_to_summary_trace_outside_production(monkeypatch: Any) -> None:
+    from backend.app import _resolve_trace_mode
+
+    monkeypatch.delenv("XHS_BACKEND_TRACE_MODE", raising=False)
+    monkeypatch.delenv("XHS_ENV", raising=False)
+    monkeypatch.delenv("ENV", raising=False)
+
+    assert _resolve_trace_mode(None) == "summary"
+
+
 def make_client(tmp_path: Path) -> AsyncClient:
     runtime = AgentRuntime(
         project_root=tmp_path,

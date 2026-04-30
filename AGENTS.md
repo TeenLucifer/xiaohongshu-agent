@@ -122,8 +122,8 @@
 - `016-agent-local-harness`
   - 本地 Python 调用入口与 smoke harness
 - `017-xhs-research-persist-loop`
-  - 小红书调研闭环、发散搜集后的 Top 6 图文帖子详情采集与标准帖子包下载
-- `027-agent-skills-suite`
+  - 小红书帖子显式下载落盘链路、将已确认帖子详情写入标准帖子包
+- `018-agent-skills-suite`
   - 统一管理业务型 skills 的边界、输入输出、配置与验收
   - 当前包含：
     - `pattern-summary`

@@ -79,7 +79,7 @@
 - 后端需要同时服务对话主链路与工作区对象读取
 - 后端需提供图片区上传图片的最小读写接口，并将真实图片上传记录挂到 `/context`
 - 文案编辑区允许使用一个专用动作接口执行“选区 AI 润色”，但该接口仍复用同一 session/runtime 真相层
-- 随着 `027-agent-skills-suite` 中 `image-generation` 接入，主栏消息 DTO 允许附带轻量图片附件元数据
+- 随着 `018-agent-skills-suite` 中 `image-generation` 接入，主栏消息 DTO 允许附带轻量图片附件元数据
 - 后端返回薄 DTO，不直接暴露 runtime 内部模型
 - 错误返回采用最小清晰结构，不做复杂任务状态机
 - 本地开发拓扑固定为：
